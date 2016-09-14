@@ -66,7 +66,7 @@ static data::Solution make_solution( const EclipseGrid& grid ) {
     }
 
     sol[ ds::TEMP ].assign( numCells, 7.0 );
-    sol[ ds::SWAT ].assign( numCells, 8.0 );
+    sol[ ds::SWAT ].assign( numCells, 0.1 );
     sol[ ds::SGAS ].assign( numCells, 9.0 );
 
 
@@ -564,10 +564,22 @@ BOOST_AUTO_TEST_CASE(region_vars) {
     BOOST_CHECK( ecl_sum_has_general_var( resp , "RPR:1"));
     BOOST_CHECK( ecl_sum_has_general_var( resp , "RPR:10"));
     BOOST_CHECK( !ecl_sum_has_general_var( resp , "RPR:11"));
+
+    BOOST_CHECK( ecl_sum_has_general_var( resp , "RWIP:1"));
+    BOOST_CHECK( ecl_sum_has_general_var( resp , "RWIP:10"));
+    BOOST_CHECK( !ecl_sum_has_general_var( resp , "RWIP:11"));
     UnitSystem units( UnitSystem::UNIT_TYPE_METRIC );
 
     for (size_t r=1; r <= 10; r++) {
-        std::string key = "RPR:" + std::to_string( r );
-        BOOST_CHECK_CLOSE( r * 1.0 , units.to_si( UnitSystem::measure::pressure , ecl_sum_get_general_var( resp, 1, key.c_str())) , 1e-5);
+        std::string rpr_key = "RPR:" + std::to_string( r );
+        std::string rwip_key = "RWIP:" + std::to_string( r );
+
+        double rpr  = units.to_si( UnitSystem::measure::pressure , ecl_sum_get_general_var( resp, 1, rpr_key.c_str()));
+        double rwip = units.to_si( UnitSystem::measure::volume   , ecl_sum_get_general_var( resp, 1, rwip_key.c_str()));
+
+        BOOST_CHECK_CLOSE( r * 1.0 , rpr , 1e-5);
+
+	// Volume of cells is 0.1 * 0.25 * 0.5*0.5r, swat == 0.1, 100 cells in region. PORO = 0.50, NTG = 0.50
+	BOOST_CHECK_CLOSE( r*0.1 * 0.25 * 100 * 0.25 , rwip , 1e-5);
     }
 }
