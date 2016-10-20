@@ -17,6 +17,7 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <iostream>
 #include <algorithm>
 
 #include <opm/output/data/Solution.hpp>
@@ -51,10 +52,12 @@ std::pair< Solution::iterator, bool > Solution::insert( std::string name,
 void data::Solution::convertToSI( const UnitSystem& units ) {
     if (this->si) return;
 
-    for( auto& elm : *this ) {
-        UnitSystem::measure dim = elm.second.dim;
-        if (dim != UnitSystem::measure::identity)
-            units.to_si( dim , elm.second.data );
+    if (size() > 0) {
+        for( auto& elm : *this ) {
+            UnitSystem::measure dim = elm.second.dim;
+            if (dim != UnitSystem::measure::identity)
+                units.to_si( dim , elm.second.data );
+        }
     }
 
     this->si = true;
@@ -63,12 +66,15 @@ void data::Solution::convertToSI( const UnitSystem& units ) {
 void data::Solution::convertFromSI( const UnitSystem& units ) {
     if (!this->si) return;
 
-    for (auto& elm : *this ) {
-        UnitSystem::measure dim = elm.second.dim;
-        if (dim != UnitSystem::measure::identity)
-            units.from_si( dim , elm.second.data );
+    std::cerr << "      Running convertFromSI" << std::endl;
+    if (size() > 0) {
+        for (auto& elm : *this ) {
+            UnitSystem::measure dim = elm.second.dim;
+            if (dim != UnitSystem::measure::identity)
+                units.from_si( dim , elm.second.data );
+        }
     }
-
+    std::cerr << "      convertFromSI complete" << std::endl;
     this->si = false;
 }
 
