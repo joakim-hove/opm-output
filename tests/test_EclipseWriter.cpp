@@ -17,6 +17,7 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include "config.h"
+#include <iostream>
 
 #if HAVE_DYNAMIC_BOOST_TEST
 #define BOOST_TEST_DYN_LINK
@@ -226,6 +227,12 @@ void checkRestartFile( int timeStepIdx ) {
     }
 }
 
+
+static void msg(const std::string& s) {
+    std::cerr << s << std::endl;
+}
+
+
 BOOST_AUTO_TEST_CASE(EclipseWriterIntegration) {
     const char *deckString =
         "RUNSPEC\n"
@@ -268,7 +275,10 @@ BOOST_AUTO_TEST_CASE(EclipseWriterIntegration) {
         "'PROD' 'G' 3 3 1000 'OIL' /\n"
         "/\n";
 
+    msg( "1: Starting test");
     ERT::TestArea ta("test_ecl_writer");
+
+    msg("2: Created test area");
 
     auto write_and_check = [&]( int first = 1, int last = 5 ) {
         auto deck = Parser().parseString( deckString, ParseContext() );
@@ -326,6 +336,7 @@ BOOST_AUTO_TEST_CASE(EclipseWriterIntegration) {
 
         return file_size;
     };
+    msg("3: Insane lambda created");
 
     /*
      * write the file and calculate the file size. FOO.UNRST should be
@@ -337,22 +348,28 @@ BOOST_AUTO_TEST_CASE(EclipseWriterIntegration) {
      * * https://github.com/OPM/opm-output/pull/61
      */
     const auto file_size = write_and_check();
+    msg("4: file_size = ");
 
     for( int i = 0; i < 3; ++i )
         BOOST_CHECK_EQUAL( file_size, write_and_check() );
 
+    msg("5: test1 complete");
     /*
      * check that "restarting" and writing over previous timesteps does not
      * change the file size, if the total amount of steps are the same
      */
     BOOST_CHECK_EQUAL( file_size, write_and_check( 3, 5 ) );
+    msg("6: test2 complete");
+
 
     /* verify that adding steps from restart also increases file size */
     BOOST_CHECK( file_size < write_and_check( 3, 7 ) );
+    msg("7: test3 complete");
 
     /*
      * verify that restarting a simulation, then writing fewer steps truncates
      * the file
      */
     BOOST_CHECK_EQUAL( file_size, write_and_check( 3, 5 ) );
+    msg("8: test4 complete - going out of scope.");
 }
