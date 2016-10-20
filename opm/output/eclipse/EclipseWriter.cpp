@@ -21,6 +21,7 @@
   along with OPM.  If not, see <http://www.gnu.org/licenses/>.
 */
 #include <unordered_map>
+#include <iostream>
 
 #include "config.h"
 
@@ -103,6 +104,10 @@ void writeKeyword( ERT::FortIO& fortio ,
     ERT::EclKW< float > kw( keywordName, data );
     kw.fwrite( fortio );
 
+}
+
+void msg(const std::string& s) {
+    std::cerr << s << std::endl;
 }
 
 
@@ -578,17 +583,21 @@ void EclipseWriter::writeInitAndEgrid(data::Solution simProps, const NNC& nnc) {
     if( !this->impl->output_enabled )
         return;
 
+    msg("    Starting in initAndEgrid");
     {
         const auto& es = *this->impl->es;
         const IOConfig& ioConfig = es.cfg().io();
 
         simProps.convertFromSI( es.getUnits() );
+        msg("    Calling writeINIT");
         if( ioConfig.getWriteINITFile() )
             this->impl->writeINITFile( simProps , nnc );
 
+        msg("    Calling writeEGRID");
         if( ioConfig.getWriteEGRIDFile( ) )
             this->impl->writeEGRIDFile( nnc );
     }
+    msg("    Returning");
 }
 
 
