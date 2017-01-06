@@ -1,7 +1,10 @@
 #ifndef ECLIPSEREADER_HPP
 #define ECLIPSEREADER_HPP
 
+#include <map>
 #include <utility>
+
+#include <opm/parser/eclipse/Units/UnitSystem.hpp>
 
 #include <opm/output/data/Cells.hpp>
 #include <opm/output/data/Wells.hpp>
@@ -26,7 +29,7 @@ namespace Opm {
 ///
 
     std::pair< data::Solution, data::Wells >
-    init_from_restart_file( const EclipseState&, int numcells );
+    init_from_restart_file( const EclipseState&, const std::map<std::string, UnitSystem::measure>& keys,  int numcells );
 
 
 }

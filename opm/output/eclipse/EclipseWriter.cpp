@@ -67,7 +67,7 @@ namespace {
 
 inline void convertFromSiTo( std::vector< double >& siValues,
                                     const UnitSystem& units,
-                                    UnitSystem::measure m ) {
+                             UnitSystem::measure m ) {
     for (size_t curIdx = 0; curIdx < siValues.size(); ++curIdx) {
         siValues[curIdx] = units.from_si( m, siValues[ curIdx ] );
     }
