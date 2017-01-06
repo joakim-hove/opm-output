@@ -392,7 +392,7 @@ std::pair< data::Solution, data::Wells > second_sim(const std::map<std::string, 
     const auto& grid = eclipseState.getInputGrid();
     auto num_cells = grid.getNX() * grid.getNY() * grid.getNZ();
 
-    return init_from_restart_file( eclipseState, keys, num_cells );
+    return load_from_restart_file( eclipseState, keys, num_cells );
 }
 
 

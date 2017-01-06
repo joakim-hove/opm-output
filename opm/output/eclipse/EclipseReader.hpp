@@ -15,7 +15,7 @@ namespace Opm {
     class EclipseState;
 
 ///
-/// \brief init_from_restart_file
+/// \brief load_from_restart_file
 ///     Reading from the restart file, information stored under the OPM_XWEL keyword and SOLUTION data is in this method filled into
 ///     an instance of a wellstate object and a SimulatorState object.
 /// \param grid
@@ -29,7 +29,7 @@ namespace Opm {
 ///
 
     std::pair< data::Solution, data::Wells >
-    init_from_restart_file( const EclipseState&, const std::map<std::string, UnitSystem::measure>& keys,  int numcells );
+    load_from_restart_file( const EclipseState&, const std::map<std::string, UnitSystem::measure>& keys,  int numcells );
 
 
 }

@@ -159,7 +159,7 @@ data::Wells restore_wells( const double* xwel_data,
 
 /* should take grid as argument because it may be modified from the simulator */
 std::pair< data::Solution, data::Wells >
-init_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) {
+load_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) {
 
     const InitConfig& initConfig         = es.getInitConfig();
     const auto& ioConfig                 = es.getIOConfig();
