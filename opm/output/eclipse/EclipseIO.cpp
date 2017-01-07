@@ -307,9 +307,9 @@ inline int ertPhaseMask( const Phases& phase ) {
 
 class RFT {
     public:
-        RFT( const char* output_dir,
-             const char* basename,
-             bool format );
+    RFT( const std::string&  output_dir,
+         const std::string&  basename,
+         bool format );
 
         void writeTimeStep( std::vector< const Well* >,
                             const EclipseGrid& grid,
@@ -319,14 +319,14 @@ class RFT {
                             ert_ecl_unit_enum,
                             const data::Solution& cells);
     private:
-        ERT::FortIO fortio;
+       FileName filename;
 };
 
 
-RFT::RFT( const char* output_dir,
-          const char* basename,
-          bool format ) :
-    fortio(FileName( output_dir, basename, ECL_RFT_FILE, format ).get(),std::ios_base::out)
+    RFT::RFT( const std::string& output_dir,
+              const std::string& basename,
+              bool format ) :
+        filename( FileName( output_dir, basename, ECL_RFT_FILE, format ) )
 {}
 
 inline ert_ecl_unit_enum to_ert_unit( UnitSystem::UnitType t ) {
@@ -352,8 +352,9 @@ void RFT::writeTimeStep( std::vector< const Well* > wells,
     const std::vector<double>& pressure = cells.data("PRESSURE");
     const std::vector<double>& swat = cells.data("SWAT");
     const std::vector<double>& sgas = cells.has("SGAS") ? cells.data("SGAS") : std::vector<double>( pressure.size() , 0 );
+    ERT::FortIO fortio(filename.get(),std::ios_base::out);
 
-    for( const auto& well : wells ) {
+    for ( const auto& well : wells ) {
         if( !( well->getRFTActive( report_step )
             || well->getPLTActive( report_step ) ) )
             continue;
@@ -381,8 +382,10 @@ void RFT::writeTimeStep( std::vector< const Well* > wells,
         }
 
         rft ecl_node( rft_node );
-        ecl_rft_node_fwrite( ecl_node.get(), this->fortio.get(), unitsystem );
+        ecl_rft_node_fwrite( ecl_node.get(), fortio.get(), unitsystem );
     }
+
+    fortio.close();
 }
 
 inline std::string uppercase( std::string x ) {
