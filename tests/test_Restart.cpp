@@ -365,13 +365,10 @@ data::Solution mkSolution( int numCells ) {
 }
 
 std::pair< data::Solution, data::Wells >
-first_sim(const std::string& eclipse_data_filename) {
-    auto eclipseState = Parser::parse( eclipse_data_filename );
-
-    const auto& grid = eclipseState.getInputGrid();
+first_sim(const EclipseState& es, EclipseWriter& eclWriter) {
+    const auto& grid = es.getInputGrid();
     auto num_cells = grid.getNX() * grid.getNY() * grid.getNZ();
 
-    EclipseWriter eclWriter( eclipseState, grid);
     auto start_time = ecl_util_make_date( 1, 11, 1979 );
     auto first_step = ecl_util_make_date( 10, 10, 2008 );
 
@@ -386,13 +383,13 @@ first_sim(const std::string& eclipse_data_filename) {
     return { sol, wells };
 }
 
-std::pair< data::Solution, data::Wells > second_sim(const std::map<std::string, UnitSystem::measure>& keys) {
+std::pair< data::Solution, data::Wells > second_sim(const EclipseWriter& writer, const std::map<std::string, UnitSystem::measure>& keys) {
     auto eclipseState = Parser::parseData( input() );
 
     const auto& grid = eclipseState.getInputGrid();
     auto num_cells = grid.getNX() * grid.getNY() * grid.getNZ();
 
-    return load_from_restart_file( eclipseState, keys, num_cells );
+    return writer.load_from_restart_file( eclipseState, keys, num_cells );
 }
 
 
@@ -420,13 +417,16 @@ BOOST_AUTO_TEST_CASE(EclipseReadWriteWellStateData) {
     ERT::TestArea testArea("test_Restart");
     testArea.copyFile( "FIRST_SIM.DATA" );
 
-    auto state1 = first_sim( "FIRST_SIM.DATA" );
-    auto state2 = second_sim( keys );
+    auto eclipseState = Parser::parse( "FIRST_SIM.DATA" );
+    const auto& grid = eclipseState.getInputGrid();
+    EclipseWriter eclWriter( eclipseState, grid);
+    auto state1 = first_sim( eclipseState , eclWriter );
+    auto state2 = second_sim( eclWriter , keys );
     compare(state1, state2 , keys);
 
     {
         std::map<std::string, UnitSystem::measure> extra_keys {{"SOIL" , UnitSystem::measure::pressure}};
-        BOOST_CHECK_THROW( second_sim( extra_keys ) , std::runtime_error );
+        BOOST_CHECK_THROW( second_sim( eclWriter, extra_keys ) , std::runtime_error );
     }
 }
 

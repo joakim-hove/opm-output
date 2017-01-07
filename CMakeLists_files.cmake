@@ -6,7 +6,6 @@ list( APPEND MAIN_SOURCE_FILES
         opm/test_util/summaryRegressionTest.cpp
         opm/test_util/summaryComparator.cpp
         opm/output/eclipse/EclipseGridInspector.cpp
-        opm/output/eclipse/EclipseReader.cpp
         opm/output/eclipse/EclipseWriter.cpp
         opm/output/eclipse/Summary.cpp
         opm/output/eclipse/Tables.cpp
@@ -26,7 +25,6 @@ list (APPEND PUBLIC_HEADER_FILES
         opm/test_util/summaryComparator.hpp
         opm/output/eclipse/EclipseGridInspector.hpp
         opm/output/eclipse/EclipseIOUtil.hpp
-        opm/output/eclipse/EclipseReader.hpp
         opm/output/eclipse/EclipseWriter.hpp
         opm/output/eclipse/Summary.hpp
         opm/output/eclipse/Tables.hpp        
