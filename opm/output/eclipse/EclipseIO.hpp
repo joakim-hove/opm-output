@@ -42,13 +42,13 @@ class EclipseState;
  * \brief A class to write the reservoir state and the well state of a
  *        blackoil simulation to disk using the Eclipse binary format.
  */
-class EclipseWriter {
+class EclipseIO {
 public:
     /*!
      * \brief Sets the common attributes required to write eclipse
      *        binary files using ERT.
      */
-    EclipseWriter( const EclipseState&, EclipseGrid );
+    EclipseIO( const EclipseState&, EclipseGrid );
 
 
 
@@ -119,7 +119,7 @@ public:
       load.
 
       The return value is of type 'data::Solution', which is the same
-      container type which is used by the EclipseWriter, but observe
+      container type which is used by the EclipseIO, but observe
       that the dim and target elements carry no information:
 
          - The returned double data has been converted to SI.
@@ -129,8 +129,8 @@ public:
     load_from_restart_file( const EclipseState&, const std::map<std::string, UnitSystem::measure>& keys,  int numcells ) const;
 
 
-    EclipseWriter( const EclipseWriter& ) = delete;
-    ~EclipseWriter();
+    EclipseIO( const EclipseIO& ) = delete;
+    ~EclipseIO();
 
 private:
     class Impl;

@@ -21,11 +21,10 @@
 #define BOOST_TEST_DYN_LINK
 #endif
 
-#define BOOST_TEST_MODULE EclipseWriter
+#define BOOST_TEST_MODULE EclipseIO
 #include <boost/test/unit_test.hpp>
 
-#include <opm/output/eclipse/EclipseWriter.hpp>
-#include <opm/output/eclipse/EclipseReader.hpp>
+#include <opm/output/eclipse/EclipseIO.hpp>
 #include <opm/output/data/Cells.hpp>
 #include <opm/output/data/Wells.hpp>
 #include <opm/parser/eclipse/Deck/Deck.hpp>
@@ -365,7 +364,7 @@ data::Solution mkSolution( int numCells ) {
 }
 
 std::pair< data::Solution, data::Wells >
-first_sim(const EclipseState& es, EclipseWriter& eclWriter) {
+first_sim(const EclipseState& es, EclipseIO& eclWriter) {
     const auto& grid = es.getInputGrid();
     auto num_cells = grid.getNX() * grid.getNY() * grid.getNZ();
 
@@ -383,7 +382,7 @@ first_sim(const EclipseState& es, EclipseWriter& eclWriter) {
     return { sol, wells };
 }
 
-std::pair< data::Solution, data::Wells > second_sim(const EclipseWriter& writer, const std::map<std::string, UnitSystem::measure>& keys) {
+std::pair< data::Solution, data::Wells > second_sim(const EclipseIO& writer, const std::map<std::string, UnitSystem::measure>& keys) {
     auto eclipseState = Parser::parseData( input() );
 
     const auto& grid = eclipseState.getInputGrid();
@@ -419,7 +418,7 @@ BOOST_AUTO_TEST_CASE(EclipseReadWriteWellStateData) {
 
     auto eclipseState = Parser::parse( "FIRST_SIM.DATA" );
     const auto& grid = eclipseState.getInputGrid();
-    EclipseWriter eclWriter( eclipseState, grid);
+    EclipseIO eclWriter( eclipseState, grid);
     auto state1 = first_sim( eclipseState , eclWriter );
     auto state2 = second_sim( eclWriter , keys );
     compare(state1, state2 , keys);

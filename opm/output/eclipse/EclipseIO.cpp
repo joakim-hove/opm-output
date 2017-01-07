@@ -24,7 +24,7 @@
 
 #include "config.h"
 
-#include "EclipseWriter.hpp"
+#include "EclipseIO.hpp"
 
 #include <opm/parser/eclipse/Deck/DeckKeyword.hpp>
 #include <opm/parser/eclipse/Units/Dimension.hpp>
@@ -394,7 +394,7 @@ inline std::string uppercase( std::string x ) {
 
 }
 
-class EclipseWriter::Impl {
+class EclipseIO::Impl {
     public:
         Impl( const EclipseState& es, EclipseGrid grid );
         void writeINITFile( const data::Solution& simProps, const NNC& nnc) const;
@@ -414,7 +414,7 @@ class EclipseWriter::Impl {
         bool first_restart = true;
 };
 
-EclipseWriter::Impl::Impl( const EclipseState& eclipseState,
+EclipseIO::Impl::Impl( const EclipseState& eclipseState,
                            EclipseGrid grid_)
     : es( eclipseState )
     , grid( std::move( grid_ ) )
@@ -430,7 +430,7 @@ EclipseWriter::Impl::Impl( const EclipseState& eclipseState,
 
 
 
-void EclipseWriter::Impl::writeINITFile( const data::Solution& simProps, const NNC& nnc) const {
+void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& nnc) const {
     const auto& units = this->es.getUnits();
     const IOConfig& ioConfig = this->es.cfg().io();
 
@@ -549,7 +549,7 @@ void EclipseWriter::Impl::writeINITFile( const data::Solution& simProps, const N
 }
 
 
-void EclipseWriter::Impl::writeEGRIDFile( const NNC& nnc ) const {
+void EclipseIO::Impl::writeEGRIDFile( const NNC& nnc ) const {
     const auto& ioConfig = this->es.getIOConfig();
 
     FileName  egridFile( this->outputDir,
@@ -568,7 +568,7 @@ void EclipseWriter::Impl::writeEGRIDFile( const NNC& nnc ) const {
 }
 
 
-void EclipseWriter::writeInitial( data::Solution simProps, const NNC& nnc) {
+void EclipseIO::writeInitial( data::Solution simProps, const NNC& nnc) {
     if( !this->impl->output_enabled )
         return;
 
@@ -668,7 +668,7 @@ std::vector< int > serialize_IWEL( const data::Wells& wells,
 }
 
 // implementation of the writeTimeStep method
-void EclipseWriter::writeTimeStep(int report_step,
+void EclipseIO::writeTimeStep(int report_step,
                                   bool  isSubstep,
                                   double secs_elapsed,
                                   data::Solution cells,
@@ -824,7 +824,7 @@ void EclipseWriter::writeTimeStep(int report_step,
 
 
 
-EclipseWriter::EclipseWriter( const EclipseState& es, EclipseGrid grid)
+EclipseIO::EclipseIO( const EclipseState& es, EclipseGrid grid)
     : impl( new Impl( es, std::move( grid ) ) )
 {
     if( !this->impl->output_enabled )
@@ -968,7 +968,7 @@ data::Wells restore_wells( const double* xwel_data,
 
 /* should take grid as argument because it may be modified from the simulator */
 std::pair< data::Solution, data::Wells >
-EclipseWriter::load_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) const {
+EclipseIO::load_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) const {
 
     const InitConfig& initConfig         = es.getInitConfig();
     const auto& ioConfig                 = es.getIOConfig();
@@ -1010,6 +1010,6 @@ EclipseWriter::load_from_restart_file( const EclipseState& es, const std::map<st
     };
 }
 
-EclipseWriter::~EclipseWriter() {}
+EclipseIO::~EclipseIO() {}
 
 } // namespace Opm
