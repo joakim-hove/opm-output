@@ -112,9 +112,9 @@ void writeKeyword( ERT::FortIO& fortio ,
 /**
  * Pointer to memory that holds the name to an Eclipse output file.
  */
-class FileName {
+class EclFileName {
 public:
-    FileName(const std::string& outputDir,
+    EclFileName(const std::string& outputDir,
              const std::string& baseName,
              ecl_file_enum type,
              int writeStepIdx,
@@ -128,7 +128,7 @@ public:
                 std::free )
     {}
 
-    FileName(const std::string& outputDir,
+    EclFileName(const std::string& outputDir,
              const std::string& baseName,
              ecl_file_enum type,
              bool formatted ) :
@@ -263,7 +263,7 @@ public:
     const ecl_rst_file_type* ertHandle() const { return this->rst_file.get(); }
 
 private:
-    FileName filename;
+    EclFileName filename;
     restart_file rst_file;
 };
 
@@ -319,14 +319,14 @@ class RFT {
                             ert_ecl_unit_enum,
                             const data::Solution& cells);
     private:
-       FileName filename;
+       EclFileName filename;
 };
 
 
     RFT::RFT( const std::string& output_dir,
               const std::string& basename,
               bool format ) :
-        filename( FileName( output_dir, basename, ECL_RFT_FILE, format ) )
+        filename( EclFileName( output_dir, basename, ECL_RFT_FILE, format ) )
 {}
 
 inline ert_ecl_unit_enum to_ert_unit( UnitSystem::UnitType t ) {
@@ -437,7 +437,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
     const auto& units = this->es.getUnits();
     const IOConfig& ioConfig = this->es.cfg().io();
 
-    FileName  initFile( this->outputDir,
+    EclFileName  initFile( this->outputDir,
                         this->baseName,
                         ECL_INIT_FILE,
                         ioConfig.getFMTOUT() );
@@ -555,7 +555,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
 void EclipseIO::Impl::writeEGRIDFile( const NNC& nnc ) const {
     const auto& ioConfig = this->es.getIOConfig();
 
-    FileName  egridFile( this->outputDir,
+    EclFileName  egridFile( this->outputDir,
                          this->baseName,
                          ECL_EGRID_FILE,
                          ioConfig.getFMTOUT() );
@@ -978,10 +978,9 @@ EclipseIO::load_from_restart_file( const EclipseState& es, const std::map<std::s
     int restart_step                     = initConfig.getRestartStep();
     const std::string& restart_file_root = initConfig.getRestartRootName();
     bool output                          = false;
-    const std::string filename           = ioConfig.getRestartFileName(
-                                                        restart_file_root,
-                                                        restart_step,
-                                                        output);
+    const std::string filename           = ioConfig.getRestartFileName(restart_file_root,
+                                                                       restart_step,
+                                                                       output);
     const bool unified                   = ioConfig.getUNIFIN();
     using ft = ERT::ert_unique_ptr< ecl_file_type, ecl_file_close >;
     ft file( ecl_file_open( filename.c_str(), 0 ) );
