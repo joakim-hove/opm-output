@@ -7,6 +7,7 @@ list( APPEND MAIN_SOURCE_FILES
         opm/test_util/summaryComparator.cpp
         opm/output/eclipse/EclipseGridInspector.cpp
         opm/output/eclipse/EclipseIO.cpp
+        opm/output/eclipse/RestartIO.cpp
         opm/output/eclipse/Summary.cpp
         opm/output/eclipse/Tables.cpp
         opm/output/eclipse/RegionCache.cpp
@@ -26,6 +27,7 @@ list (APPEND PUBLIC_HEADER_FILES
         opm/output/eclipse/EclipseGridInspector.hpp
         opm/output/eclipse/EclipseIOUtil.hpp
         opm/output/eclipse/EclipseIO.hpp
+        opm/output/eclipse/RestartIO.hpp
         opm/output/eclipse/Summary.hpp
         opm/output/eclipse/Tables.hpp        
         opm/output/eclipse/RegionCache.hpp
