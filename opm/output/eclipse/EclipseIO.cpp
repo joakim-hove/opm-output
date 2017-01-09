@@ -104,7 +104,6 @@ void writeKeyword( ERT::FortIO& fortio ,
 }
 
 
-
 using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
 
     restart_file open_rst( const std::string& filename,
@@ -120,6 +119,21 @@ using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close 
 
     return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
 }
+
+void writeSolution(restart_file& rst_file , const data::Solution& solution) {
+    ecl_rst_file_start_solution( rst_file.get() );
+    for (const auto& elm: solution) {
+        if (elm.second.target == data::TargetType::RESTART_SOLUTION)
+            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
+     }
+     ecl_rst_file_end_solution( rst_file.get() );
+
+     for (const auto& elm: solution) {
+        if (elm.second.target == data::TargetType::RESTART_AUXILLARY)
+            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
+     }
+}
+
 
 class Restart {
 public:
@@ -216,34 +230,6 @@ private:
     //restart_file rst_file;
 };
 
-/**
- * The Solution class wraps the actions that must be done to the restart file while
- * writing solution variables; it is not a handle on its own.
- */
-class Solution {
-public:
-    Solution( restart_file& res ) : restart( res ) {
-        ecl_rst_file_start_solution( this->restart.get() );
-    }
-
-    template< typename T >
-    void add( ERT::EclKW< T >&& kw ) {
-        ecl_rst_file_add_kw( this->restart.get(), kw.get() );
-    }
-
-    template<typename T>
-    void addFromCells(const data::Solution& solution) {
-        for (const auto& elm: solution) {
-            if (elm.second.target == data::TargetType::RESTART_SOLUTION)
-                this->add( ERT::EclKW<T>(elm.first, elm.second.data ));
-        }
-    }
-
-    ~Solution() { ecl_rst_file_end_solution( this->restart.get() ); }
-
-private:
-    restart_file& restart;
-};
 
 /// Convert OPM phase usage to ERT bitmask
 inline int ertPhaseMask( const Phases& phase ) {
@@ -718,11 +704,6 @@ void EclipseIO::writeTimeStep(int report_step,
 
 
         /*
-          The code in the block below is in a state of flux, and not
-          very well tested. In particular there have been issues with
-          the mapping between active an inactive cells in the past -
-          there might be more those.
-
           Currently the code hard-codes the following assumptions:
 
             1. All the cells[ ] vectors have size equal to the number
@@ -733,21 +714,8 @@ void EclipseIO::writeTimeStep(int report_step,
                RS/RV vectors.
 
         */
-        {
-            Solution sol(rst_file);  //Type solution: confusing
+        writeSolution( rst_file , cells );
 
-            sol.addFromCells<float>( cells );
-            // MIssing a ENDSOL output.
-            {
-                for (const auto& prop : cells) {
-                    if (prop.second.target == data::TargetType::RESTART_AUXILLARY) {
-                        auto ecl_data = grid.compressedVector( prop.second.data );
-
-                        sol.add( ERT::EclKW<float>(prop.first, ecl_data));
-                    }
-                }
-            }
-        }
     }
 
 
