@@ -49,6 +49,8 @@
 
 #include <ert/ecl/EclKW.hpp>
 #include <ert/ecl/FortIO.hpp>
+#include <ert/ecl/EclFilename.hpp>
+
 #include <ert/ecl/ecl_kw_magic.h>
 #include <ert/ecl/ecl_init_file.h>
 #include <ert/ecl/ecl_file.h>
@@ -102,45 +104,6 @@ void writeKeyword( ERT::FortIO& fortio ,
 }
 
 
-/**
- * Pointer to memory that holds the name to an Eclipse output file.
- */
-class EclFileName {
-public:
-    EclFileName(const std::string& outputDir,
-             const std::string& baseName,
-             ecl_file_enum type,
-             int writeStepIdx,
-             bool formatted ) :
-        filename( ecl_util_alloc_filename(
-                                outputDir.c_str(),
-                                baseName.c_str(),
-                                type,
-                                formatted,
-                                writeStepIdx ),
-                std::free )
-    {}
-
-    EclFileName(const std::string& outputDir,
-             const std::string& baseName,
-             ecl_file_enum type,
-             bool formatted ) :
-
-        filename( ecl_util_alloc_filename(
-                                outputDir.c_str(),
-                                baseName.c_str(),
-                                type,
-                                formatted,
-                                0 ),
-                  std::free )
-    {}
-
-    const char* get() const { return this->filename.get(); }
-
-private:
-    using fd = std::unique_ptr< char, decltype( std::free )* >;
-    fd filename;
-};
 
 using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
 
@@ -188,12 +151,12 @@ public:
             int writeStepIdx,
             const IOConfig& ioConfig,
             bool first_restart ) :
-        filename( outputDir,
-                baseName,
-                ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
-                writeStepIdx,
-                ioConfig.getFMTOUT() ),
-        rst_file( open_rst( filename.get(),
+        filename( ERT::EclFilename( outputDir ,
+                                    baseName,
+                                    ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
+                                    writeStepIdx,
+                                    ioConfig.getFMTOUT() )),
+        rst_file( open_rst( filename.c_str(),
                             first_restart,
                             ioConfig.getUNIFOUT(),
                             writeStepIdx ) )
@@ -256,7 +219,7 @@ public:
     const ecl_rst_file_type* ertHandle() const { return this->rst_file.get(); }
 
 private:
-    EclFileName filename;
+    std::string filename;
     restart_file rst_file;
 };
 
@@ -312,14 +275,14 @@ class RFT {
                             ert_ecl_unit_enum,
                             const data::Solution& cells);
     private:
-       EclFileName filename;
+        std::string filename;
 };
 
 
     RFT::RFT( const std::string& output_dir,
               const std::string& basename,
               bool format ) :
-        filename( EclFileName( output_dir, basename, ECL_RFT_FILE, format ) )
+        filename( ERT::EclFilename( output_dir, basename, ECL_RFT_FILE, format ) )
 {}
 
 inline ert_ecl_unit_enum to_ert_unit( UnitSystem::UnitType t ) {
@@ -345,7 +308,7 @@ void RFT::writeTimeStep( std::vector< const Well* > wells,
     const std::vector<double>& pressure = cells.data("PRESSURE");
     const std::vector<double>& swat = cells.data("SWAT");
     const std::vector<double>& sgas = cells.has("SGAS") ? cells.data("SGAS") : std::vector<double>( pressure.size() , 0 );
-    ERT::FortIO fortio(filename.get(),std::ios_base::out);
+    ERT::FortIO fortio(filename, std::ios_base::out);
 
     for ( const auto& well : wells ) {
         if( !( well->getRFTActive( report_step )
@@ -430,12 +393,12 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
     const auto& units = this->es.getUnits();
     const IOConfig& ioConfig = this->es.cfg().io();
 
-    EclFileName  initFile( this->outputDir,
-                        this->baseName,
-                        ECL_INIT_FILE,
-                        ioConfig.getFMTOUT() );
+    std::string  initFile( ERT::EclFilename( this->outputDir,
+                                             this->baseName,
+                                             ECL_INIT_FILE,
+                                             ioConfig.getFMTOUT() ));
 
-    ERT::FortIO fortio( initFile.get() ,
+    ERT::FortIO fortio( initFile,
                         std::ios_base::out,
                         ioConfig.getFMTOUT(),
                         ECL_ENDIAN_FLIP );
@@ -542,10 +505,10 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
 void EclipseIO::Impl::writeEGRIDFile( const NNC& nnc ) const {
     const auto& ioConfig = this->es.getIOConfig();
 
-    EclFileName  egridFile( this->outputDir,
-                         this->baseName,
-                         ECL_EGRID_FILE,
-                         ioConfig.getFMTOUT() );
+    std::string  egridFile( ERT::EclFilename( this->outputDir,
+                                              this->baseName,
+                                              ECL_EGRID_FILE,
+                                              ioConfig.getFMTOUT() ));
 
     {
         int idx = 0;
@@ -553,7 +516,7 @@ void EclipseIO::Impl::writeEGRIDFile( const NNC& nnc ) const {
         for (const NNCdata& n : nnc.nncdata())
             ecl_grid_add_self_nnc( ecl_grid, n.cell1, n.cell2, idx++);
 
-        ecl_grid_fwrite_EGRID2(ecl_grid, egridFile.get(), to_ert_unit( this->es.getDeckUnitSystem().getType()));
+        ecl_grid_fwrite_EGRID2(ecl_grid, egridFile.c_str(), to_ert_unit( this->es.getDeckUnitSystem().getType()));
     }
 }
 
