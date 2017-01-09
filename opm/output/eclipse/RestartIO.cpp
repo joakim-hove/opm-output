@@ -23,6 +23,9 @@
 #include <string>
 #include <vector>
 
+#include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
+#include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
+
 #include <opm/output/eclipse/RestartIO.hpp>
 
 #include <ert/ecl/EclKW.hpp>
@@ -208,6 +211,97 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
                        restart_step,
                        es )
     };
+}
+
+
+std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
+                                   const std::vector< const Well* > sched_wells ) {
+
+    const auto getctrl = [&]( const Well* w ) {
+        const auto itr = wells.find( w->name() );
+        return itr == wells.end() ? 0 : itr->second.control;
+    };
+
+    std::vector< int > iwel( sched_wells.size(), 0.0 );
+    std::transform( sched_wells.begin(), sched_wells.end(), iwel.begin(), getctrl );
+
+    return iwel;
+}
+
+std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
+                                      int report_step,
+                                      const std::vector< const Well* > sched_wells,
+                                      const Phases& phase_spec,
+                                      const EclipseGrid& grid ) {
+
+    using rt = data::Rates::opt;
+
+    std::vector< rt > phases;
+    if( phase_spec.active( Phase::WATER ) ) phases.push_back( rt::wat );
+    if( phase_spec.active( Phase::OIL ) )   phases.push_back( rt::oil );
+    if( phase_spec.active( Phase::GAS ) )   phases.push_back( rt::gas );
+
+    std::vector< double > xwel;
+    for( const auto* sched_well : sched_wells ) {
+
+        if( wells.count( sched_well->name() ) == 0 ) {
+            const auto elems = (sched_well->getCompletions( report_step ).size()
+                               * (phases.size() + data::Completion::restart_size))
+                + 2 /* bhp, temperature */
+                + phases.size();
+
+            // write zeros if no well data is provided
+            xwel.insert( xwel.end(), elems, 0.0 );
+            continue;
+        }
+
+        const auto& well = wells.at( sched_well->name() );
+
+        xwel.push_back( well.bhp );
+        xwel.push_back( well.temperature );
+        for( auto phase : phases )
+            xwel.push_back( well.rates.get( phase ) );
+
+        for( const auto& sc : sched_well->getCompletions( report_step ) ) {
+            const auto i = sc.getI(), j = sc.getJ(), k = sc.getK();
+
+            const auto rs_size = phases.size() + data::Completion::restart_size;
+            if( !grid.cellActive( i, j, k ) || sc.getState() == WellCompletion::SHUT ) {
+                xwel.insert( xwel.end(), rs_size, 0.0 );
+                continue;
+            }
+
+            const auto active_index = grid.activeIndex( i, j, k );
+            const auto at_index = [=]( const data::Completion& c ) {
+                return c.index == active_index;
+            };
+            const auto& completion = std::find_if( well.completions.begin(),
+                                                   well.completions.end(),
+                                                   at_index );
+
+            if( completion == well.completions.end() ) {
+                xwel.insert( xwel.end(), rs_size, 0.0 );
+                continue;
+            }
+
+            xwel.push_back( completion->pressure );
+            xwel.push_back( completion->reservoir_rate );
+            for( auto phase : phases )
+                xwel.push_back( completion->rates.get( phase ) );
+        }
+    }
+
+    return xwel;
+};
+
+
+void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int stepIdx, ecl_rsthead_type* rsthead_data ) {
+  ecl_util_set_date_values( rsthead_data->sim_time,
+                            &rsthead_data->day,
+                            &rsthead_data->month,
+                            &rsthead_data->year );
+  ecl_rst_file_fwrite_header( rst_file.get() , stepIdx, rsthead_data );
+
 }
 
 void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution) {

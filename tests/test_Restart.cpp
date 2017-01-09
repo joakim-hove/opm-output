@@ -25,6 +25,7 @@
 #include <boost/test/unit_test.hpp>
 
 #include <opm/output/eclipse/EclipseIO.hpp>
+#include <opm/output/eclipse/RestartIO.hpp>
 #include <opm/output/data/Cells.hpp>
 #include <opm/output/data/Wells.hpp>
 #include <opm/parser/eclipse/Deck/Deck.hpp>
@@ -436,8 +437,8 @@ BOOST_AUTO_TEST_CASE(OPM_XWEL) {
     const auto& sched = es.getSchedule( );
     const auto& sched_wells = sched.getWells( 1 );
     const auto wells = mkWells();
-    const auto xwel = serialize_XWEL( wells, 1, sched_wells, ph, grid );
-    const auto iwel = serialize_IWEL( wells, sched_wells );
+    const auto opm_xwel = RestartIO::serialize_OPM_XWEL( wells, 1, sched_wells, ph, grid );
+    const auto opm_iwel = RestartIO::serialize_OPM_IWEL( wells, sched_wells );
 
     /*
       const auto restored_wells = restore_wells( xwel.data(), xwel.size(),
