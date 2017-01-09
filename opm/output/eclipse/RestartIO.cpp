@@ -81,7 +81,7 @@ namespace {
     }
 
 
-    inline data::Solution restoreSOLUTION( ecl_file_type* file,
+    inline data::Solution restoreSOLUTION( ecl_file_view_type* file_view,
                                            const std::map<std::string, UnitSystem::measure>& keys,
                                            int numcells,
                                            const UnitSystem& units ) {
@@ -90,13 +90,13 @@ namespace {
         for (const auto& pair : keys) {
             const std::string& key = pair.first;
             UnitSystem::measure dim = pair.second;
-            if( !ecl_file_has_kw( file, key.c_str() ) )
+            if( !ecl_file_view_has_kw( file_view, key.c_str() ) )
                 throw std::runtime_error("Read of restart file: "
                                          "File does not contain "
                                          + key
                                          + " data" );
 
-            const ecl_kw_type * ecl_kw = ecl_file_iget_named_kw( file , key.c_str() , 0 );
+            const ecl_kw_type * ecl_kw = ecl_file_view_iget_named_kw( file_view , key.c_str() , 0 );
             if( ecl_kw_get_size(ecl_kw) != numcells)
                 throw std::runtime_error("Restart file: Could not restore "
                                          + std::string( ecl_kw_get_header( ecl_kw ) )
@@ -113,12 +113,10 @@ namespace {
 
 
 using rt = data::Rates::opt;
-data::Wells restore_wells( const double* xwel_data,
-                           size_t xwel_data_size,
-                           const int* iwel_data,
-                           size_t iwel_data_size,
-                           int restart_step,
-                           const EclipseState& es ) {
+    data::Wells restore_wells( const ecl_kw_type * opm_xwel,
+                               const ecl_kw_type * opm_iwel,
+                               int restart_step,
+                               const EclipseState& es ) {
 
     const auto& sched_wells = es.getSchedule().getWells( restart_step );
     const EclipseGrid& grid = es.getInputGrid( );
@@ -141,34 +139,36 @@ data::Wells restore_wells( const double* xwel_data,
                                                      size_t( 0 ),
                                                      well_size );
 
-    if( xwel_data_size != expected_xwel_size ) {
+    if( ecl_kw_get_size( opm_xwel ) != expected_xwel_size ) {
         throw std::runtime_error(
                 "Mismatch between OPM_XWEL and deck; "
-                "OPM_XWEL size was " + std::to_string( xwel_data_size ) +
+                "OPM_XWEL size was " + std::to_string( ecl_kw_get_size( opm_xwel ) ) +
                 ", expected " + std::to_string( expected_xwel_size ) );
     }
 
-    if( iwel_data_size != sched_wells.size() )
+    if( ecl_kw_get_size( opm_iwel ) != sched_wells.size() )
         throw std::runtime_error(
                 "Mismatch between OPM_IWEL and deck; "
-                "OPM_IWEL size was " + std::to_string( iwel_data_size ) +
+                "OPM_IWEL size was " + std::to_string( ecl_kw_get_size( opm_iwel ) ) +
                 ", expected " + std::to_string( sched_wells.size() ) );
 
     data::Wells wells;
+    const double * opm_xwel_data = ecl_kw_get_double_ptr( opm_xwel );
+    const int * opm_iwel_data = ecl_kw_get_int_ptr( opm_iwel );
     for( const auto* sched_well : sched_wells ) {
         data::Well& well = wells[ sched_well->name() ];
 
-        well.bhp = *xwel_data++;
-        well.temperature = *xwel_data++;
-        well.control = *iwel_data++;
+        well.bhp = *opm_xwel_data++;
+        well.temperature = *opm_xwel_data++;
+        well.control = *opm_iwel_data++;
 
         for( auto phase : phases )
-            well.rates.set( phase, *xwel_data++ );
+            well.rates.set( phase, *opm_xwel_data++ );
 
         for( const auto& sc : sched_well->getCompletions( restart_step ) ) {
             const auto i = sc.getI(), j = sc.getJ(), k = sc.getK();
             if( !grid.cellActive( i, j, k ) || sc.getState() == WellCompletion::SHUT ) {
-                xwel_data += data::Completion::restart_size + phases.size();
+                opm_xwel_data += data::Completion::restart_size + phases.size();
                 continue;
             }
 
@@ -177,10 +177,10 @@ data::Wells restore_wells( const double* xwel_data,
             well.completions.emplace_back();
             auto& completion = well.completions.back();
             completion.index = active_index;
-            completion.pressure = *xwel_data++;
-            completion.reservoir_rate = *xwel_data++;
+            completion.pressure = *opm_xwel_data++;
+            completion.reservoir_rate = *opm_xwel_data++;
             for( auto phase : phases )
-                completion.rates.set( phase, *xwel_data++ );
+                completion.rates.set( phase, *opm_xwel_data++ );
         }
     }
 
@@ -200,31 +200,26 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
                                                                        restart_step,
                                                                        output);
     const bool unified                   = ioConfig.getUNIFIN();
-    using ft = ERT::ert_unique_ptr< ecl_file_type, ecl_file_close >;
-    ft file( ecl_file_open( filename.c_str(), 0 ) );
+    ERT::ert_unique_ptr< ecl_file_type, ecl_file_close > file(ecl_file_open( filename.c_str(), 0 ));
+    ecl_file_view_type * file_view;
 
     if( !file )
         throw std::runtime_error( "Restart file " + filename + " not found!" );
 
-    if( unified &&
-        !ecl_file_select_rstblock_report_step( file.get(), restart_step ) ) {
-        throw std::runtime_error( "Restart file " + filename
-                + " does not contain data for report step "
-                + std::to_string( restart_step ) + "!" );
-    }
+    if( unified ) {
+        file_view = ecl_file_get_restart_view( file.get() , -1 , restart_step , -1 , -1 );
+        if (!file_view)
+            throw std::runtime_error( "Restart file " + filename
+                                      + " does not contain data for report step "
+                                      + std::to_string( restart_step ) + "!" );
+    } else
+        file_view = ecl_file_get_global_view( file.get() );
 
-    ecl_kw_type* xwel = ecl_file_iget_named_kw( file.get(), "OPM_XWEL", 0 );
-    const double* xwel_data = ecl_kw_get_double_ptr( xwel );
-    const auto xwel_size = ecl_kw_get_size( xwel );
-
-    ecl_kw_type* iwel = ecl_file_iget_named_kw( file.get(), "OPM_IWEL", 0 );
-    const int* iwel_data = ecl_kw_get_int_ptr( iwel );
-    const auto iwel_size = ecl_kw_get_size( iwel );
-
+    const ecl_kw_type* opm_xwel = ecl_file_view_iget_named_kw( file_view , "OPM_XWEL", 0 );
+    const ecl_kw_type* opm_iwel = ecl_file_view_iget_named_kw( file_view, "OPM_IWEL", 0 );
     return {
-        restoreSOLUTION( file.get(), keys, numcells, es.getUnits() ),
-        restore_wells( xwel_data, xwel_size,
-                       iwel_data, iwel_size,
+        restoreSOLUTION( file_view, keys, numcells, es.getUnits() ),
+        restore_wells( opm_xwel, opm_iwel,
                        restart_step,
                        es )
     };
