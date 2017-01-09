@@ -107,18 +107,18 @@ void writeKeyword( ERT::FortIO& fortio ,
 
 using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
 
-restart_file open_rst( const char* filename,
+    restart_file open_rst( const std::string& filename,
           bool first_restart,
           bool unifout,
           int report_step ) {
 
     if( !unifout )
-        return restart_file{ ecl_rst_file_open_write( filename ) };
+        return restart_file{ ecl_rst_file_open_write( filename.c_str() ) };
 
     if( first_restart )
-        return restart_file{ ecl_rst_file_open_write_seek( filename, report_step ) };
+        return restart_file{ ecl_rst_file_open_write_seek( filename.c_str(), report_step ) };
 
-    return restart_file{ ecl_rst_file_open_append( filename ) };
+    return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
 }
 
 class Restart {
@@ -155,16 +155,12 @@ public:
                                     baseName,
                                     ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
                                     writeStepIdx,
-                                    ioConfig.getFMTOUT() )),
-        rst_file( open_rst( filename.c_str(),
-                            first_restart,
-                            ioConfig.getUNIFOUT(),
-                            writeStepIdx ) )
+                                    ioConfig.getFMTOUT() ))
     {}
 
     template< typename T >
-    void add_kw( ERT::EclKW< T >&& kw ) {
-        ecl_rst_file_add_kw( this->rst_file.get(), kw.get() );
+    void add_kw( restart_file& rst_file, ERT::EclKW< T >&& kw ) {
+        ecl_rst_file_add_kw( rst_file.get(), kw.get() );
     }
 
     void addRestartFileIwelData( std::vector<int>& data,
@@ -206,21 +202,18 @@ public:
         }
     }
 
-    void writeHeader( int stepIdx, ecl_rsthead_type* rsthead_data ) {
+    void writeHeader( restart_file& rst_file, int stepIdx, ecl_rsthead_type* rsthead_data ) {
       ecl_util_set_date_values( rsthead_data->sim_time,
                                 &rsthead_data->day,
                                 &rsthead_data->month,
                                 &rsthead_data->year );
-      ecl_rst_file_fwrite_header( this->rst_file.get(), stepIdx, rsthead_data );
+      ecl_rst_file_fwrite_header( rst_file.get() , stepIdx, rsthead_data );
 
     }
 
-    ecl_rst_file_type* ertHandle() { return this->rst_file.get(); }
-    const ecl_rst_file_type* ertHandle() const { return this->rst_file.get(); }
-
 private:
     std::string filename;
-    restart_file rst_file;
+    //restart_file rst_file;
 };
 
 /**
@@ -229,13 +222,13 @@ private:
  */
 class Solution {
 public:
-    Solution( Restart& res ) : restart( res ) {
-        ecl_rst_file_start_solution( res.ertHandle() );
+    Solution( restart_file& res ) : restart( res ) {
+        ecl_rst_file_start_solution( this->restart.get() );
     }
 
     template< typename T >
     void add( ERT::EclKW< T >&& kw ) {
-        ecl_rst_file_add_kw( this->restart.ertHandle(), kw.get() );
+        ecl_rst_file_add_kw( this->restart.get(), kw.get() );
     }
 
     template<typename T>
@@ -246,12 +239,10 @@ public:
         }
     }
 
-    ecl_rst_file_type* ertHandle() { return this->restart.ertHandle(); }
-
-    ~Solution() { ecl_rst_file_end_solution( this->restart.ertHandle() ); }
+    ~Solution() { ecl_rst_file_end_solution( this->restart.get() ); }
 
 private:
-    Restart& restart;
+    restart_file& restart;
 };
 
 /// Convert OPM phase usage to ERT bitmask
@@ -637,7 +628,7 @@ void EclipseIO::writeTimeStep(int report_step,
     const auto& es = this->impl->es;
     const auto& grid = this->impl->grid;
     const auto& units = es.getUnits();
-    const data::Solution cells_si = cells;
+    const auto& ioConfig = es.getIOConfig();
     const auto& restart = es.cfg().restart();
 
 
@@ -661,6 +652,17 @@ void EclipseIO::writeTimeStep(int report_step,
         std::vector<const char*> zwell_data( numWells * Restart::NZWELZ , "");
         std::vector<int>         iwell_data( numWells * Restart::NIWELZ , 0 );
         std::vector<int>         icon_data( numWells * ncwmax * Restart::NICONZ , 0 );
+
+        std::string filename = ERT::EclFilename( this->impl->outputDir,
+                                                 this->impl->baseName,
+                                                 ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
+                                                 report_step,
+                                                 ioConfig.getFMTOUT() );
+
+        restart_file rst_file = open_rst( filename ,
+                                          this->impl->first_restart,
+                                          ioConfig.getUNIFOUT(),
+                                          report_step );
 
         Restart restartHandle( this->impl->outputDir,
                                this->impl->baseName,
@@ -701,7 +703,7 @@ void EclipseIO::writeTimeStep(int report_step,
             rsthead_data.sim_days   = days;
             rsthead_data.unit_system= to_ert_unit( units.getType() );
 
-            restartHandle.writeHeader( report_step, &rsthead_data);
+            restartHandle.writeHeader( rst_file , report_step, &rsthead_data);
         }
 
         const auto& phases = es.runspec().phases();
@@ -709,11 +711,11 @@ void EclipseIO::writeTimeStep(int report_step,
         const auto xwel = serialize_XWEL( wells, report_step, sched_wells, phases, grid );
         const auto iwel = serialize_IWEL( wells, sched_wells );
 
-        restartHandle.add_kw( ERT::EclKW< int >(IWEL_KW, iwell_data) );
-        restartHandle.add_kw( ERT::EclKW< const char* >(ZWEL_KW, zwell_data ) );
-        restartHandle.add_kw( ERT::EclKW< double >( OPM_XWEL, xwel ) );
-        restartHandle.add_kw( ERT::EclKW< int >( OPM_IWEL, iwel ) );
-        restartHandle.add_kw( ERT::EclKW< int >( ICON_KW, icon_data ) );
+        restartHandle.add_kw( rst_file, ERT::EclKW< int >( IWEL_KW, iwell_data) );
+        restartHandle.add_kw( rst_file, ERT::EclKW< const char* >(ZWEL_KW, zwell_data ) );
+        restartHandle.add_kw( rst_file, ERT::EclKW< double >( OPM_XWEL, xwel ) );
+        restartHandle.add_kw( rst_file, ERT::EclKW< int >( OPM_IWEL, iwel ) );
+        restartHandle.add_kw( rst_file, ERT::EclKW< int >( ICON_KW, icon_data ) );
 
 
         /*
@@ -733,7 +735,7 @@ void EclipseIO::writeTimeStep(int report_step,
 
         */
         {
-            Solution sol(restartHandle);  //Type solution: confusing
+            Solution sol(rst_file);  //Type solution: confusing
 
             if (write_float)
                 sol.addFromCells<float>( cells );
