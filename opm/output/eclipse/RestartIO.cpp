@@ -210,6 +210,21 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
     };
 }
 
+void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution) {
+    ecl_rst_file_start_solution( rst_file.get() );
+    for (const auto& elm: solution) {
+        if (elm.second.target == data::TargetType::RESTART_SOLUTION)
+            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
+     }
+     ecl_rst_file_end_solution( rst_file.get() );
+
+     for (const auto& elm: solution) {
+        if (elm.second.target == data::TargetType::RESTART_AUXILLARY)
+            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
+     }
+}
+
+
 }
 }
 

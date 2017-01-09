@@ -120,19 +120,6 @@ using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close 
     return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
 }
 
-void writeSolution(restart_file& rst_file , const data::Solution& solution) {
-    ecl_rst_file_start_solution( rst_file.get() );
-    for (const auto& elm: solution) {
-        if (elm.second.target == data::TargetType::RESTART_SOLUTION)
-            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
-     }
-     ecl_rst_file_end_solution( rst_file.get() );
-
-     for (const auto& elm: solution) {
-        if (elm.second.target == data::TargetType::RESTART_AUXILLARY)
-            ecl_rst_file_add_kw( rst_file.get() , ERT::EclKW<float>(elm.first, elm.second.data).get());
-     }
-}
 
 
 class Restart {
@@ -714,8 +701,7 @@ void EclipseIO::writeTimeStep(int report_step,
                RS/RV vectors.
 
         */
-        writeSolution( rst_file , cells );
-
+        RestartIO::writeSolution( rst_file , cells );
     }
 
 

@@ -30,11 +30,14 @@
 #include <opm/output/data/Solution.hpp>
 #include <opm/output/data/Wells.hpp>
 
+#include <ert/ecl/ecl_rst_file.h>
+#include <ert/util/util.h>
+
 namespace Opm {
 namespace RestartIO {
 
+void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution);
 void save();
-std::pair< data::Solution, data::Wells > load();
 
 
 
