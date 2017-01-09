@@ -66,14 +66,6 @@ namespace Opm {
 namespace {
 
 
-inline void convertFromSiTo( std::vector< double >& siValues,
-                                    const UnitSystem& units,
-                             UnitSystem::measure m ) {
-    for (size_t curIdx = 0; curIdx < siValues.size(); ++curIdx) {
-        siValues[curIdx] = units.from_si( m, siValues[ curIdx ] );
-    }
-}
-
 inline int to_ert_welltype( const Well& well, size_t timestep ) {
 
     if( well.isProducer( timestep ) ) return IWEL_PRODUCER;
@@ -472,10 +464,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
                                      this->ert_phase_mask,
                                      this->sim_start_time);
 
-        convertFromSiTo( ecl_data,
-                         units,
-                         UnitSystem::measure::volume);
-
+        units.from_si( UnitSystem::measure::volume, ecl_data );
         writeKeyword( fortio, "PORV" , ecl_data );
     }
 
@@ -496,10 +485,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
             const auto& opm_property = properties.getDoubleGridProperty(kw_pair.first);
             auto ecl_data = opm_property.compressedCopy( this->grid );
 
-            convertFromSiTo( ecl_data,
-                             units,
-                             kw_pair.second );
-
+            units.from_si( kw_pair.second, ecl_data );
             writeKeyword( fortio, kw_pair.first, ecl_data );
         }
     }
@@ -547,7 +533,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
         for( const NNCdata& nd : nnc.nncdata() )
             tran.push_back( nd.trans );
 
-        convertFromSiTo( tran, units, UnitSystem::measure::transmissibility );
+        units.from_si( UnitSystem::measure::transmissibility , tran );
         writeKeyword( fortio, "TRANNNC" , tran );
     }
 }
