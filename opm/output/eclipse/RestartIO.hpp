@@ -33,6 +33,7 @@
 #include <opm/output/data/Solution.hpp>
 #include <opm/output/data/Wells.hpp>
 
+#include <ert/ecl/EclKW.hpp>
 #include <ert/ecl/ecl_rsthead.h>
 #include <ert/ecl/ecl_rst_file.h>
 #include <ert/util/util.h>
@@ -69,6 +70,11 @@ namespace RestartIO {
 void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int stepIdx, ecl_rsthead_type* rsthead_data );
 void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution);
 
+template< typename T >
+void write_kw(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , ERT::EclKW< T >&& kw) {
+   ecl_rst_file_add_kw( rst_file.get(), kw.get() );
+}
+
 std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
                                       int report_step,
                                       const std::vector< const Well* > sched_wells,
@@ -77,6 +83,16 @@ std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
 
 std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
                                        const std::vector< const Well* > sched_wells );
+
+std::vector<int> serialize_IWEL( size_t step,
+                                 const std::vector<const Well *>& wells);
+
+std::vector<const char*> serialize_ZWEL( const std::vector<const Well *>& wells);
+
+
+std::vector<int> serialize_ICON( int report_step,
+                                 int ncwmax,
+                                 const std::vector<const Well*>& sched_wells);
 
 void save();
 

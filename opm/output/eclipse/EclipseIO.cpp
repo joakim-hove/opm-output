@@ -68,17 +68,6 @@ namespace Opm {
 namespace {
 
 
-inline int to_ert_welltype( const Well& well, size_t timestep ) {
-
-    if( well.isProducer( timestep ) ) return IWEL_PRODUCER;
-
-    switch( well.getInjectionProperties( timestep ).injectorType ) {
-        case WellInjector::WATER: return IWEL_WATER_INJECTOR;
-        case WellInjector::GAS: return IWEL_GAS_INJECTOR;
-        case WellInjector::OIL: return IWEL_OIL_INJECTOR;
-        default: return IWEL_UNDOCUMENTED_ZERO;
-    }
-}
 
 
 void writeKeyword( ERT::FortIO& fortio ,
@@ -120,63 +109,6 @@ using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close 
     return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
 }
 
-
-
-class Restart {
-public:
-    Restart(const std::string& outputDir,
-            const std::string& baseName,
-            int writeStepIdx,
-            const IOConfig& ioConfig,
-            bool first_restart )
-    {}
-
-    template< typename T >
-    void add_kw( restart_file& rst_file, ERT::EclKW< T >&& kw ) {
-        ecl_rst_file_add_kw( rst_file.get(), kw.get() );
-    }
-
-    void addRestartFileIwelData( std::vector<int>& data,
-                                 size_t step,
-                                 const Well& well,
-                                 size_t offset ) const {
-
-        const auto& completions = well.getCompletions( step );
-
-        data[ offset + IWEL_HEADI_INDEX ] = well.getHeadI( step ) + 1;
-        data[ offset + IWEL_HEADJ_INDEX ] = well.getHeadJ( step ) + 1;
-        data[ offset + IWEL_CONNECTIONS_INDEX ] = completions.size();
-        data[ offset + IWEL_GROUP_INDEX ] = 1;
-
-        data[ offset + IWEL_TYPE_INDEX ] = to_ert_welltype( well, step );
-        data[ offset + IWEL_STATUS_INDEX ] =
-            well.getStatus( step ) == WellCommon::OPEN ? 1 : 0;
-    }
-
-    void addRestartFileIconData( std::vector< int >& data,
-                                 const CompletionSet& completions,
-                                 size_t wellICONOffset ) const {
-
-        for( size_t i = 0; i < completions.size(); ++i ) {
-            const auto& completion = completions.get( i );
-            size_t offset = wellICONOffset + i * RestartIO::NICONZ;
-            data[ offset + ICON_IC_INDEX ] = 1;
-
-            data[ offset + ICON_I_INDEX ] = completion.getI() + 1;
-            data[ offset + ICON_J_INDEX ] = completion.getJ() + 1;
-            data[ offset + ICON_K_INDEX ] = completion.getK() + 1;
-
-            const auto open = WellCompletion::StateEnum::OPEN;
-            data[ offset + ICON_STATUS_INDEX ] = completion.getState() == open
-                                              ? 1
-                                              : 0;
-
-            data[ offset + ICON_DIRECTION_INDEX ] = completion.getDirection();
-        }
-    }
-
-
-};
 
 
 /// Convert OPM phase usage to ERT bitmask
@@ -502,11 +434,7 @@ void EclipseIO::writeTimeStep(int report_step,
     {
         const size_t ncwmax     = schedule.getMaxNumCompletionsForWells(report_step);
         const size_t numWells   = schedule.numWells(report_step);
-        auto wells_ptr          = schedule.getWells(report_step);
-
-        std::vector<const char*> zwell_data( numWells * RestartIO::NZWELZ , "");
-        std::vector<int>         iwell_data( numWells * RestartIO::NIWELZ , 0 );
-        std::vector<int>         icon_data( numWells * ncwmax * RestartIO::NICONZ , 0 );
+        const auto sched_wells  = schedule.getWells(report_step);
 
         std::string filename = ERT::EclFilename( this->impl->outputDir,
                                                  this->impl->baseName,
@@ -519,27 +447,8 @@ void EclipseIO::writeTimeStep(int report_step,
                                           ioConfig.getUNIFOUT(),
                                           report_step );
 
-        Restart restartHandle( this->impl->outputDir,
-                               this->impl->baseName,
-                               report_step,
-                               es.cfg().io(),
-                               this->impl->first_restart );
-
         RestartIO::save( );
         this->impl->first_restart = false;
-
-        for (size_t iwell = 0; iwell < wells_ptr.size(); ++iwell) {
-            const auto& well = *wells_ptr[iwell];
-            {
-                size_t wellIwelOffset = RestartIO::NIWELZ * iwell;
-                restartHandle.addRestartFileIwelData(iwell_data, report_step, well , wellIwelOffset);
-            }
-            {
-                size_t wellIconOffset = ncwmax * RestartIO::NICONZ * iwell;
-                restartHandle.addRestartFileIconData(icon_data,  well.getCompletions( report_step ), wellIconOffset);
-            }
-            zwell_data[ iwell * RestartIO::NZWELZ ] = well.name().c_str();
-        }
 
 
         {
@@ -561,29 +470,21 @@ void EclipseIO::writeTimeStep(int report_step,
             RestartIO::writeHeader( rst_file , report_step, &rsthead_data);
         }
 
-        const auto& phases = es.runspec().phases();
-        const auto& sched_wells = schedule.getWells( report_step );
-        const auto opm_xwel = RestartIO::serialize_OPM_XWEL( wells, report_step, sched_wells, phases, grid );
-        const auto opm_iwel = RestartIO::serialize_OPM_IWEL( wells, sched_wells );
+        {
+            const auto& phases = es.runspec().phases();
+            const auto opm_xwel = RestartIO::serialize_OPM_XWEL( wells, report_step, sched_wells, phases, grid );
+            const auto opm_iwel = RestartIO::serialize_OPM_IWEL( wells, sched_wells );
+            const auto iwel_data = RestartIO::serialize_IWEL(report_step, sched_wells);
+            const auto icon_data = RestartIO::serialize_ICON(report_step , ncwmax, sched_wells);
+            const auto zwel_data = RestartIO::serialize_ZWEL( sched_wells );
 
-        restartHandle.add_kw( rst_file, ERT::EclKW< int >( IWEL_KW, iwell_data) );
-        restartHandle.add_kw( rst_file, ERT::EclKW< const char* >(ZWEL_KW, zwell_data ) );
-        restartHandle.add_kw( rst_file, ERT::EclKW< double >( OPM_XWEL, opm_xwel ) );
-        restartHandle.add_kw( rst_file, ERT::EclKW< int >( OPM_IWEL, opm_iwel ) );
-        restartHandle.add_kw( rst_file, ERT::EclKW< int >( ICON_KW, icon_data ) );
+            RestartIO::write_kw( rst_file, ERT::EclKW< int >( IWEL_KW, iwel_data) );
+            RestartIO::write_kw( rst_file, ERT::EclKW< const char* >(ZWEL_KW, zwel_data ) );
+            RestartIO::write_kw( rst_file, ERT::EclKW< double >( OPM_XWEL, opm_xwel ) );
+            RestartIO::write_kw( rst_file, ERT::EclKW< int >( OPM_IWEL, opm_iwel ) );
+            RestartIO::write_kw( rst_file, ERT::EclKW< int >( ICON_KW, icon_data ) );
+        }
 
-
-        /*
-          Currently the code hard-codes the following assumptions:
-
-            1. All the cells[ ] vectors have size equal to the number
-               of active cells, and they are already in eclipse
-               ordering.
-
-            2. No unit transformatio applied to the saturation and
-               RS/RV vectors.
-
-        */
         RestartIO::writeSolution( rst_file , cells );
     }
 

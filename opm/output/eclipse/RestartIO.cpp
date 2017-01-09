@@ -51,6 +51,22 @@ void save() {
 
 
 namespace {
+
+    inline int to_ert_welltype( const Well& well, size_t timestep ) {
+        if( well.isProducer( timestep ) ) return IWEL_PRODUCER;
+
+        switch( well.getInjectionProperties( timestep ).injectorType ) {
+        case WellInjector::WATER:
+            return IWEL_WATER_INJECTOR;
+        case WellInjector::GAS:
+            return IWEL_GAS_INJECTOR;
+        case WellInjector::OIL:
+            return IWEL_OIL_INJECTOR;
+        default:
+            return IWEL_UNDOCUMENTED_ZERO;
+        }
+    }
+
     std::vector<double> double_vector( const ecl_kw_type * ecl_kw ) {
         size_t size = ecl_kw_get_size( ecl_kw );
 
@@ -63,6 +79,7 @@ namespace {
         }
 
     }
+
 
     inline data::Solution restoreSOLUTION( ecl_file_type* file,
                                            const std::map<std::string, UnitSystem::measure>& keys,
@@ -214,8 +231,62 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
 }
 
 
+
+std::vector<int> serialize_ICON( int report_step,
+                                 int ncwmax,
+                                 const std::vector<const Well*>& sched_wells) {
+
+    size_t well_offset = 0;
+    std::vector<int> data( sched_wells.size() * ncwmax * RestartIO::NICONZ , 0 );
+    for (const Well* well : sched_wells) {
+        const auto& completions = well->getCompletions( report_step );
+        size_t completion_offset = 0;
+        for( const auto& completion : completions) {
+            size_t offset = well_offset + completion_offset;
+            data[ offset + ICON_IC_INDEX ] = 1;
+
+            data[ offset + ICON_I_INDEX ] = completion.getI() + 1;
+            data[ offset + ICON_J_INDEX ] = completion.getJ() + 1;
+            data[ offset + ICON_K_INDEX ] = completion.getK() + 1;
+            data[ offset + ICON_DIRECTION_INDEX ] = completion.getDirection();
+            {
+                const auto open = WellCompletion::StateEnum::OPEN;
+                data[ offset + ICON_STATUS_INDEX ] = completion.getState() == open
+                    ? 1
+                    : 0;
+            }
+
+            completion_offset += RestartIO::NICONZ;
+        }
+        well_offset += ncwmax * RestartIO::NICONZ;
+    }
+    return data;
+}
+
+std::vector<int> serialize_IWEL( size_t step,
+                                 const std::vector<const Well *>& wells) {
+
+    std::vector<int> data( wells.size() * RestartIO::NIWELZ , 0 );
+    size_t offset = 0;
+    for (const auto well : wells) {
+        const auto& completions = well->getCompletions( step );
+
+        data[ offset + IWEL_HEADI_INDEX ] = well->getHeadI( step ) + 1;
+        data[ offset + IWEL_HEADJ_INDEX ] = well->getHeadJ( step ) + 1;
+        data[ offset + IWEL_CONNECTIONS_INDEX ] = completions.size();
+        data[ offset + IWEL_GROUP_INDEX ] = 1;
+
+        data[ offset + IWEL_TYPE_INDEX ] = to_ert_welltype( *well, step );
+        data[ offset + IWEL_STATUS_INDEX ] =
+            well->getStatus( step ) == WellCommon::OPEN ? 1 : 0;
+
+        offset += RestartIO::NIWELZ;
+    }
+    return data;
+}
+
 std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
-                                   const std::vector< const Well* > sched_wells ) {
+                                       const std::vector< const Well* > sched_wells ) {
 
     const auto getctrl = [&]( const Well* w ) {
         const auto itr = wells.find( w->name() );
@@ -293,6 +364,19 @@ std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
 
     return xwel;
 };
+
+
+std::vector<const char*> serialize_ZWEL( const std::vector<const Well *>& wells) {
+    std::vector<const char*> data( wells.size( ) * RestartIO::NZWELZ , "");
+    size_t offset = 0;
+
+    for (const auto& well : wells) {
+        data[ offset ] = well->name().c_str();
+        offset += RestartIO::NZWELZ;
+    }
+    return data;
+}
+
 
 
 void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int stepIdx, ecl_rsthead_type* rsthead_data ) {
