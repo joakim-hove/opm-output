@@ -616,8 +616,7 @@ void EclipseIO::writeTimeStep(int report_step,
                                   bool  isSubstep,
                                   double secs_elapsed,
                                   data::Solution cells,
-                                  data::Wells wells,
-                                  bool  write_float)
+                                  data::Wells wells)
 {
 
     if( !this->impl->output_enabled )
@@ -737,20 +736,14 @@ void EclipseIO::writeTimeStep(int report_step,
         {
             Solution sol(rst_file);  //Type solution: confusing
 
-            if (write_float)
-                sol.addFromCells<float>( cells );
-            else
-                sol.addFromCells<double>( cells );
+            sol.addFromCells<float>( cells );
             // MIssing a ENDSOL output.
             {
                 for (const auto& prop : cells) {
                     if (prop.second.target == data::TargetType::RESTART_AUXILLARY) {
                         auto ecl_data = grid.compressedVector( prop.second.data );
 
-                        if (write_float)
-                            sol.add( ERT::EclKW<float>(prop.first, ecl_data));
-                        else
-                            sol.add( ERT::EclKW<double>(prop.first, ecl_data));
+                        sol.add( ERT::EclKW<float>(prop.first, ecl_data));
                     }
                 }
             }
