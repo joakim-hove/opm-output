@@ -43,6 +43,7 @@ namespace Opm {
 class EclipseGrid;
 class EclipseState;
 class Phases;
+class Schedule;
 
 namespace RestartIO {
     static const int NIWELZ = 11; //Number of data elements per well in IWEL array in restart file
@@ -67,34 +68,26 @@ namespace RestartIO {
 
 
 // Should be private:
-void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int stepIdx, ecl_rsthead_type* rsthead_data );
+void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file ,
+                 int report_step,
+                 time_t posix_time,
+                 double sim_days,
+                 int ert_phase_mask,
+                 const Schedule& schedule,
+                 const EclipseGrid& grid);
 void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution);
 
-template< typename T >
-void write_kw(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , ERT::EclKW< T >&& kw) {
-   ecl_rst_file_add_kw( rst_file.get(), kw.get() );
-}
+void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int report_step, const EclipseState& es , const EclipseGrid& grid, const data::Wells& wells);
 
-std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
-                                      int report_step,
-                                      const std::vector< const Well* > sched_wells,
-                                      const Phases& phase_spec,
-                                      const EclipseGrid& grid );
-
-std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
-                                       const std::vector< const Well* > sched_wells );
-
-std::vector<int> serialize_IWEL( size_t step,
-                                 const std::vector<const Well *>& wells);
-
-std::vector<const char*> serialize_ZWEL( const std::vector<const Well *>& wells);
-
-
-std::vector<int> serialize_ICON( int report_step,
-                                 int ncwmax,
-                                 const std::vector<const Well*>& sched_wells);
-
-void save();
+void save(const std::string& filename,
+          bool first_restart,
+          int report_step,
+          time_t posix_time,
+          double days,
+          data::Solution cells,
+          data::Wells wells,
+          const EclipseState& es,
+          const EclipseGrid& grid);
 
 
 

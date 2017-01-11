@@ -25,6 +25,7 @@
 
 #include <opm/parser/eclipse/EclipseState/Grid/EclipseGrid.hpp>
 #include <opm/parser/eclipse/EclipseState/EclipseState.hpp>
+#include <opm/parser/eclipse/EclipseState/Schedule/Schedule.hpp>
 
 #include <opm/output/eclipse/RestartIO.hpp>
 
@@ -45,9 +46,6 @@
 namespace Opm {
 namespace RestartIO  {
 
-void save() {
-
-}
 
 
 namespace {
@@ -226,13 +224,30 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
 }
 
 
+namespace {
+using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
+
+restart_file open_rst( const std::string& filename,
+                       bool truncate,
+                       bool unifout,
+                       int report_step ) {
+
+    if( !unifout )
+        return restart_file{ ecl_rst_file_open_write( filename.c_str() ) };
+
+    if( truncate )
+        return restart_file{ ecl_rst_file_open_write_seek( filename.c_str(), report_step ) };
+
+    return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
+}
+
 
 std::vector<int> serialize_ICON( int report_step,
                                  int ncwmax,
                                  const std::vector<const Well*>& sched_wells) {
 
     size_t well_offset = 0;
-    std::vector<int> data( sched_wells.size() * ncwmax * RestartIO::NICONZ , 0 );
+    std::vector<int> data( sched_wells.size() * ncwmax * NICONZ , 0 );
     for (const Well* well : sched_wells) {
         const auto& completions = well->getCompletions( report_step );
         size_t completion_offset = 0;
@@ -251,9 +266,9 @@ std::vector<int> serialize_ICON( int report_step,
                     : 0;
             }
 
-            completion_offset += RestartIO::NICONZ;
+            completion_offset += NICONZ;
         }
-        well_offset += ncwmax * RestartIO::NICONZ;
+        well_offset += ncwmax * NICONZ;
     }
     return data;
 }
@@ -261,7 +276,7 @@ std::vector<int> serialize_ICON( int report_step,
 std::vector<int> serialize_IWEL( size_t step,
                                  const std::vector<const Well *>& wells) {
 
-    std::vector<int> data( wells.size() * RestartIO::NIWELZ , 0 );
+    std::vector<int> data( wells.size() * NIWELZ , 0 );
     size_t offset = 0;
     for (const auto well : wells) {
         const auto& completions = well->getCompletions( step );
@@ -275,7 +290,7 @@ std::vector<int> serialize_IWEL( size_t step,
         data[ offset + IWEL_STATUS_INDEX ] =
             well->getStatus( step ) == WellCommon::OPEN ? 1 : 0;
 
-        offset += RestartIO::NIWELZ;
+        offset += NIWELZ;
     }
     return data;
 }
@@ -362,25 +377,63 @@ std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
 
 
 std::vector<const char*> serialize_ZWEL( const std::vector<const Well *>& wells) {
-    std::vector<const char*> data( wells.size( ) * RestartIO::NZWELZ , "");
+    std::vector<const char*> data( wells.size( ) * NZWELZ , "");
     size_t offset = 0;
 
     for (const auto& well : wells) {
         data[ offset ] = well->name().c_str();
-        offset += RestartIO::NZWELZ;
+        offset += NZWELZ;
     }
     return data;
 }
 
+template< typename T >
+void write_kw(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , ERT::EclKW< T >&& kw) {
+   ecl_rst_file_add_kw( rst_file.get(), kw.get() );
+}
 
 
-void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int stepIdx, ecl_rsthead_type* rsthead_data ) {
-  ecl_util_set_date_values( rsthead_data->sim_time,
-                            &rsthead_data->day,
-                            &rsthead_data->month,
-                            &rsthead_data->year );
-  ecl_rst_file_fwrite_header( rst_file.get() , stepIdx, rsthead_data );
+/// Convert OPM phase usage to ERT bitmask
 
+inline int ertPhaseMask( const Phases& phase ) {
+    return ( phase.active( Phase::WATER ) ? ECL_WATER_PHASE : 0 )
+         | ( phase.active( Phase::OIL ) ? ECL_OIL_PHASE : 0 )
+         | ( phase.active( Phase::GAS ) ? ECL_GAS_PHASE : 0 );
+}
+
+
+
+}
+
+void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file ,
+                 int report_step,
+                 time_t posix_time,
+                 double sim_days,
+                 int ert_phase_mask,
+                 const Schedule& schedule,
+                 const EclipseGrid& grid) {
+
+    ecl_rsthead_type rsthead_data = {};
+
+    rsthead_data.sim_time   = posix_time;
+    rsthead_data.nactive    = grid.getNumActive();
+    rsthead_data.nx         = grid.getNX();
+    rsthead_data.ny         = grid.getNY();
+    rsthead_data.nz         = grid.getNZ();
+    rsthead_data.nwells     = schedule.numWells(report_step);
+    rsthead_data.niwelz     = NIWELZ;
+    rsthead_data.nzwelz     = NZWELZ;
+    rsthead_data.niconz     = NICONZ;
+    rsthead_data.ncwmax     = schedule.getMaxNumCompletionsForWells(report_step);
+    rsthead_data.phase_sum  = ert_phase_mask;
+    rsthead_data.sim_days   = sim_days;
+
+    ecl_util_set_date_values( rsthead_data.sim_time,
+                              &rsthead_data.day,
+                              &rsthead_data.month,
+                              &rsthead_data.year );
+
+    ecl_rst_file_fwrite_header( rst_file.get() , report_step , &rsthead_data );
 }
 
 void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution) {
@@ -398,6 +451,49 @@ void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >&
 }
 
 
+void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int report_step, const EclipseState& es , const EclipseGrid& grid, const data::Wells& wells) {
+
+    const auto& schedule = es.getSchedule();
+    const auto sched_wells  = schedule.getWells(report_step);
+    const auto& phases = es.runspec().phases();
+    const size_t ncwmax = schedule.getMaxNumCompletionsForWells(report_step);
+
+    const auto opm_xwel  = serialize_OPM_XWEL( wells, report_step, sched_wells, phases, grid );
+    const auto opm_iwel  = serialize_OPM_IWEL( wells, sched_wells );
+    const auto iwel_data = serialize_IWEL(report_step, sched_wells);
+    const auto icon_data = serialize_ICON(report_step , ncwmax, sched_wells);
+    const auto zwel_data = serialize_ZWEL( sched_wells );
+
+    write_kw( rst_file, ERT::EclKW< int >( IWEL_KW, iwel_data) );
+    write_kw( rst_file, ERT::EclKW< const char* >(ZWEL_KW, zwel_data ) );
+    write_kw( rst_file, ERT::EclKW< double >( OPM_XWEL, opm_xwel ) );
+    write_kw( rst_file, ERT::EclKW< int >( OPM_IWEL, opm_iwel ) );
+    write_kw( rst_file, ERT::EclKW< int >( ICON_KW, icon_data ) );
+}
+
+
+void save(const std::string& filename,
+          bool first_restart,
+          int report_step,
+          time_t posix_time,
+          double days,
+          data::Solution cells,
+          data::Wells wells,
+          const EclipseState& es,
+          const EclipseGrid& grid)
+{
+    const auto& ioConfig = es.getIOConfig();
+    restart_file rst_file = open_rst( filename ,
+                                      first_restart,
+                                      ioConfig.getUNIFOUT(),
+                                      report_step );
+    int ert_phase_mask = ertPhaseMask( es.runspec().phases() );
+    const Schedule& schedule = es.getSchedule();
+    RestartIO::writeHeader( rst_file , report_step, posix_time , days, ert_phase_mask, schedule , grid );
+    RestartIO::writeWell( rst_file , report_step, es , grid, wells);
+    RestartIO::writeSolution( rst_file , cells );
+
+}
 }
 }
 

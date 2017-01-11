@@ -93,21 +93,6 @@ void writeKeyword( ERT::FortIO& fortio ,
 }
 
 
-using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
-
-restart_file open_rst( const std::string& filename,
-                       bool truncate,
-                       bool unifout,
-                       int report_step ) {
-
-    if( !unifout )
-        return restart_file{ ecl_rst_file_open_write( filename.c_str() ) };
-
-    if( truncate )
-        return restart_file{ ecl_rst_file_open_write_seek( filename.c_str(), report_step ) };
-
-    return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
-}
 
 
 
@@ -432,60 +417,13 @@ void EclipseIO::writeTimeStep(int report_step,
     // Write restart file
     if(!isSubstep && restart.getWriteRestartFile(report_step))
     {
-        const size_t ncwmax     = schedule.getMaxNumCompletionsForWells(report_step);
-        const size_t numWells   = schedule.numWells(report_step);
-        const auto sched_wells  = schedule.getWells(report_step);
-
         std::string filename = ERT::EclFilename( this->impl->outputDir,
                                                  this->impl->baseName,
                                                  ioConfig.getUNIFOUT() ? ECL_UNIFIED_RESTART_FILE : ECL_RESTART_FILE,
                                                  report_step,
                                                  ioConfig.getFMTOUT() );
 
-        restart_file rst_file = open_rst( filename ,
-                                          this->impl->first_restart,
-                                          ioConfig.getUNIFOUT(),
-                                          report_step );
-
-        RestartIO::save( );
-        this->impl->first_restart = false;
-
-
-        {
-            ecl_rsthead_type rsthead_data = {};
-            rsthead_data.sim_time   = current_posix_time;
-            rsthead_data.nactive    = grid.getNumActive(),
-            rsthead_data.nx         = grid.getNX();
-            rsthead_data.ny         = grid.getNY();
-            rsthead_data.nz         = grid.getNZ();
-            rsthead_data.nwells     = numWells;
-            rsthead_data.niwelz     = RestartIO::NIWELZ;
-            rsthead_data.nzwelz     = RestartIO::NZWELZ;
-            rsthead_data.niconz     = RestartIO::NICONZ;
-            rsthead_data.ncwmax     = ncwmax;
-            rsthead_data.phase_sum  = this->impl->ert_phase_mask;
-            rsthead_data.sim_days   = days;
-            rsthead_data.unit_system= to_ert_unit( units.getType() );
-
-            RestartIO::writeHeader( rst_file , report_step, &rsthead_data);
-        }
-
-        {
-            const auto& phases = es.runspec().phases();
-            const auto opm_xwel = RestartIO::serialize_OPM_XWEL( wells, report_step, sched_wells, phases, grid );
-            const auto opm_iwel = RestartIO::serialize_OPM_IWEL( wells, sched_wells );
-            const auto iwel_data = RestartIO::serialize_IWEL(report_step, sched_wells);
-            const auto icon_data = RestartIO::serialize_ICON(report_step , ncwmax, sched_wells);
-            const auto zwel_data = RestartIO::serialize_ZWEL( sched_wells );
-
-            RestartIO::write_kw( rst_file, ERT::EclKW< int >( IWEL_KW, iwel_data) );
-            RestartIO::write_kw( rst_file, ERT::EclKW< const char* >(ZWEL_KW, zwel_data ) );
-            RestartIO::write_kw( rst_file, ERT::EclKW< double >( OPM_XWEL, opm_xwel ) );
-            RestartIO::write_kw( rst_file, ERT::EclKW< int >( OPM_IWEL, opm_iwel ) );
-            RestartIO::write_kw( rst_file, ERT::EclKW< int >( ICON_KW, icon_data ) );
-        }
-
-        RestartIO::writeSolution( rst_file , cells );
+        RestartIO::save( filename , this->impl->first_restart , report_step , current_posix_time , days , cells, wells, es , grid);
     }
 
 
