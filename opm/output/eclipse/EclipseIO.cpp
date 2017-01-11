@@ -95,15 +95,15 @@ void writeKeyword( ERT::FortIO& fortio ,
 
 using restart_file = ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >;
 
-    restart_file open_rst( const std::string& filename,
-          bool first_restart,
-          bool unifout,
-          int report_step ) {
+restart_file open_rst( const std::string& filename,
+                       bool truncate,
+                       bool unifout,
+                       int report_step ) {
 
     if( !unifout )
         return restart_file{ ecl_rst_file_open_write( filename.c_str() ) };
 
-    if( first_restart )
+    if( truncate )
         return restart_file{ ecl_rst_file_open_write_seek( filename.c_str(), report_step ) };
 
     return restart_file{ ecl_rst_file_open_append( filename.c_str() ) };
