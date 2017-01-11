@@ -295,6 +295,15 @@ std::vector<int> serialize_IWEL( size_t step,
     return data;
 }
 
+
+
+
+
+
+
+
+
+    
 std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
                                        const std::vector< const Well* > sched_wells ) {
 
@@ -393,13 +402,6 @@ void write_kw(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_
 }
 
 
-/// Convert OPM phase usage to ERT bitmask
-
-inline int ertPhaseMask( const Phases& phase ) {
-    return ( phase.active( Phase::WATER ) ? ECL_WATER_PHASE : 0 )
-         | ( phase.active( Phase::OIL ) ? ECL_OIL_PHASE : 0 )
-         | ( phase.active( Phase::GAS ) ? ECL_GAS_PHASE : 0 );
-}
 
 
 
@@ -473,10 +475,9 @@ void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst
 
 
 void save(const std::string& filename,
-          bool first_restart,
           int report_step,
-          time_t posix_time,
-          double days,
+          bool first_restart,
+          double seconds_elapsed,
           data::Solution cells,
           data::Wells wells,
           const EclipseState& es,
@@ -487,9 +488,14 @@ void save(const std::string& filename,
                                       first_restart,
                                       ioConfig.getUNIFOUT(),
                                       report_step );
-    int ert_phase_mask = ertPhaseMask( es.runspec().phases() );
+
+    int ert_phase_mask = es.runspec().eclPhaseMask( );
     const Schedule& schedule = es.getSchedule();
-    RestartIO::writeHeader( rst_file , report_step, posix_time , days, ert_phase_mask, schedule , grid );
+    const auto& units = es.getUnits();
+    time_t posix_time = schedule.posixStartTime() + seconds_elapsed;
+    const auto sim_time = units.from_si( UnitSystem::measure::time, seconds_elapsed );
+
+    RestartIO::writeHeader( rst_file , report_step, posix_time , sim_time, ert_phase_mask, schedule , grid );
     RestartIO::writeWell( rst_file , report_step, es , grid, wells);
     RestartIO::writeSolution( rst_file , cells );
 

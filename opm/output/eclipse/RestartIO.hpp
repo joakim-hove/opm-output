@@ -80,10 +80,9 @@ void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >&
 void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int report_step, const EclipseState& es , const EclipseGrid& grid, const data::Wells& wells);
 
 void save(const std::string& filename,
-          bool first_restart,
           int report_step,
-          time_t posix_time,
-          double days,
+          bool first_restart,
+          double seconds_elapsed,
           data::Solution cells,
           data::Wells wells,
           const EclipseState& es,

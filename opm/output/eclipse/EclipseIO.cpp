@@ -208,10 +208,8 @@ class EclipseIO::Impl {
         std::string baseName;
         out::Summary summary;
         RFT rft;
-        time_t sim_start_time;
         std::array< int, 3 > cartesianSize;
         bool output_enabled;
-        int ert_phase_mask;
         bool first_restart = true;
 };
 
@@ -224,9 +222,7 @@ EclipseIO::Impl::Impl( const EclipseState& eclipseState,
     , baseName( uppercase( eclipseState.getIOConfig().getBaseName() ) )
     , summary( eclipseState, eclipseState.getSummaryConfig() , grid )
     , rft( outputDir.c_str(), baseName.c_str(), es.getIOConfig().getFMTOUT() )
-    , sim_start_time( es.getSchedule().posixStartTime() )
     , output_enabled( eclipseState.getIOConfig().getOutputEnabled() )
-    , ert_phase_mask( ertPhaseMask( eclipseState.runspec().phases() ) )
 {}
 
 
@@ -265,9 +261,8 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
         ecl_init_file_fwrite_header( fortio.get(),
                                      this->grid.c_ptr(),
                                      NULL,
-                                     to_ert_unit( units.getType( ) ),
-                                     this->ert_phase_mask,
-                                     this->sim_start_time);
+                                     this->es.runspec( ).eclPhaseMask( ),
+                                     this->es.getSchedule().posixStartTime( ));
 
         units.from_si( UnitSystem::measure::volume, ecl_data );
         writeKeyword( fortio, "PORV" , ecl_data );
@@ -390,13 +385,12 @@ void EclipseIO::writeTimeStep(int report_step,
                               double secs_elapsed,
                               data::Solution cells,
                               data::Wells wells)
-{
+ {
 
     if( !this->impl->output_enabled )
         return;
 
 
-    time_t current_posix_time = this->impl->sim_start_time + secs_elapsed;
     const auto& es = this->impl->es;
     const auto& grid = this->impl->grid;
     const auto& units = es.getUnits();
@@ -404,7 +398,7 @@ void EclipseIO::writeTimeStep(int report_step,
     const auto& restart = es.cfg().restart();
 
 
-    const auto days = units.from_si( UnitSystem::measure::time, secs_elapsed );
+
     const auto& schedule = es.getSchedule();
 
     /*
@@ -423,7 +417,7 @@ void EclipseIO::writeTimeStep(int report_step,
                                                  report_step,
                                                  ioConfig.getFMTOUT() );
 
-        RestartIO::save( filename , this->impl->first_restart , report_step , current_posix_time , days , cells, wells, es , grid);
+        RestartIO::save( filename , report_step, this->impl->first_restart , secs_elapsed, cells, wells, es , grid);
     }
 
 
@@ -431,8 +425,8 @@ void EclipseIO::writeTimeStep(int report_step,
     this->impl->rft.writeTimeStep( schedule.getWells( report_step ),
                                    grid,
                                    report_step,
-                                   current_posix_time,
-                                   days,
+                                   secs_elapsed + schedule.posixStartTime(),
+                                   units.from_si( UnitSystem::measure::time, secs_elapsed ),
                                    to_ert_unit( unit_type ),
                                    cells );
 
