@@ -114,8 +114,8 @@ class RFT {
                             int report_step,
                             time_t current_time,
                             double days,
-                            ert_ecl_unit_enum,
-                            const data::Solution& cells);
+                            const UnitSystem& units,
+                            data::Solution cells);
     private:
         std::string filename;
 };
@@ -127,24 +127,14 @@ class RFT {
         filename( ERT::EclFilename( output_dir, basename, ECL_RFT_FILE, format ) )
 {}
 
-inline ert_ecl_unit_enum to_ert_unit( UnitSystem::UnitType t ) {
-    using ut = UnitSystem::UnitType;
-    switch ( t ) {
-        case ut::UNIT_TYPE_METRIC: return ECL_METRIC_UNITS;
-        case ut::UNIT_TYPE_FIELD:  return ECL_FIELD_UNITS;
-        case ut::UNIT_TYPE_LAB:    return ECL_LAB_UNITS;
-    }
-
-    throw std::invalid_argument("unhandled enum value");
-}
 
 void RFT::writeTimeStep( std::vector< const Well* > wells,
                          const EclipseGrid& grid,
                          int report_step,
                          time_t current_time,
                          double days,
-                         ert_ecl_unit_enum unitsystem,
-                         const data::Solution& cells) {
+                         const UnitSystem& units,
+                         data::Solution cells) {
 
     using rft = ERT::ert_unique_ptr< ecl_rft_node_type, ecl_rft_node_free >;
     const std::vector<double>& pressure = cells.data("PRESSURE");
@@ -152,6 +142,7 @@ void RFT::writeTimeStep( std::vector< const Well* > wells,
     const std::vector<double>& sgas = cells.has("SGAS") ? cells.data("SGAS") : std::vector<double>( pressure.size() , 0 );
     ERT::FortIO fortio(filename, std::ios_base::out);
 
+    cells.convertFromSI( units );
     for ( const auto& well : wells ) {
         if( !( well->getRFTActive( report_step )
             || well->getPLTActive( report_step ) ) )
@@ -180,7 +171,7 @@ void RFT::writeTimeStep( std::vector< const Well* > wells,
         }
 
         rft ecl_node( rft_node );
-        ecl_rft_node_fwrite( ecl_node.get(), fortio.get(), unitsystem );
+        ecl_rft_node_fwrite( ecl_node.get(), fortio.get(), units.getEclType() );
     }
 
     fortio.close();
@@ -268,8 +259,8 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
     }
 
     // Writing quantities which are calculated by the grid to the INIT file.
-    ecl_grid_fwrite_depth( this->grid.c_ptr() , fortio.get() , to_ert_unit( units.getType( )) );
-    ecl_grid_fwrite_dims( this->grid.c_ptr() , fortio.get() , to_ert_unit( units.getType( )) );
+    ecl_grid_fwrite_depth( this->grid.c_ptr() , fortio.get() , units.getEclType( ) );
+    ecl_grid_fwrite_dims( this->grid.c_ptr() , fortio.get() , units.getEclType( ) );
 
     // Write properties from the input deck.
     {
@@ -352,7 +343,7 @@ void EclipseIO::Impl::writeEGRIDFile( const NNC& nnc ) const {
         for (const NNCdata& n : nnc.nncdata())
             ecl_grid_add_self_nnc( ecl_grid, n.cell1, n.cell2, idx++);
 
-        ecl_grid_fwrite_EGRID2(ecl_grid, egridFile.c_str(), to_ert_unit( this->es.getDeckUnitSystem().getType()));
+        ecl_grid_fwrite_EGRID2(ecl_grid, egridFile.c_str(), this->es.getDeckUnitSystem().getEclType() );
     }
 }
 
@@ -406,7 +397,6 @@ void EclipseIO::writeTimeStep(int report_step,
        the conversion is done once here - and not closer to the actual
        use-site.
     */
-    cells.convertFromSI( units );
     // Write restart file
     if(!isSubstep && restart.getWriteRestartFile(report_step))
     {
@@ -421,13 +411,19 @@ void EclipseIO::writeTimeStep(int report_step,
 
 
     const auto unit_type = es.getDeckUnitSystem().getType();
-    this->impl->rft.writeTimeStep( schedule.getWells( report_step ),
-                                   grid,
-                                   report_step,
-                                   secs_elapsed + schedule.posixStartTime(),
-                                   units.from_si( UnitSystem::measure::time, secs_elapsed ),
-                                   to_ert_unit( unit_type ),
-                                   cells );
+    {
+        std::vector<const Well*> sched_wells = schedule.getWells( report_step );
+        const auto rft_active = [report_step] (const Well* w) { return w->getRFTActive( report_step ) || w->getPLTActive( report_step ); };
+        if (std::any_of(sched_wells.begin(), sched_wells.end(), rft_active)) {
+            this->impl->rft.writeTimeStep( sched_wells,
+                                           grid,
+                                           report_step,
+                                           secs_elapsed + schedule.posixStartTime(),
+                                           units.from_si( UnitSystem::measure::time, secs_elapsed ),
+                                           units,
+                                           cells );
+        }
+    }
 
     if( isSubstep ) return;
 

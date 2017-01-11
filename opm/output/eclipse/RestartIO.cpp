@@ -460,7 +460,7 @@ void writeWell(ecl_rst_file_type* rst_file, int report_step, const EclipseState&
 }
 }
 
-    
+
 void save(const std::string& filename,
           int report_step,
           double seconds_elapsed,
@@ -482,6 +482,7 @@ void save(const std::string& filename,
     else
         rst_file.reset( ecl_rst_file_open_write( filename.c_str() ) );
 
+    cells.convertFromSI( units );
     writeHeader( rst_file.get() , report_step, posix_time , sim_time, ert_phase_mask, schedule , grid );
     writeWell( rst_file.get() , report_step, es , grid, wells);
     writeSolution( rst_file.get() , cells );
