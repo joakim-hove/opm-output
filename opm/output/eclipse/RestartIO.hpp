@@ -46,23 +46,6 @@ class Phases;
 class Schedule;
 
 namespace RestartIO {
-    static const int NIWELZ = 11; //Number of data elements per well in IWEL array in restart file
-    static const int NZWELZ = 3;  //Number of 8-character words per well in ZWEL array restart file
-    static const int NICONZ = 15; //Number of data elements per completion in ICON array restart file
-
-    /**
-     * The constants NIWELZ and NZWELZ referes to the number of
-     * elements per well that we write to the IWEL and ZWEL eclipse
-     * restart file data arrays. The constant NICONZ refers to the
-     * number of elements per completion in the eclipse restart file
-     * ICON data array.These numbers are written to the INTEHEAD
-     * header.
-     *
-     * Observe that all of these values are our "current-best-guess"
-     * for how many numbers are needed; there might very well be third
-     * party applications out there which have a hard expectation for
-     * these values.
-     */
 
 
 
