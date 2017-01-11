@@ -210,7 +210,6 @@ class EclipseIO::Impl {
         RFT rft;
         std::array< int, 3 > cartesianSize;
         bool output_enabled;
-        bool first_restart = true;
 };
 
 EclipseIO::Impl::Impl( const EclipseState& eclipseState,
@@ -417,7 +416,7 @@ void EclipseIO::writeTimeStep(int report_step,
                                                  report_step,
                                                  ioConfig.getFMTOUT() );
 
-        RestartIO::save( filename , report_step, this->impl->first_restart , secs_elapsed, cells, wells, es , grid);
+        RestartIO::save( filename , report_step, secs_elapsed, cells, wells, es , grid);
     }
 
 

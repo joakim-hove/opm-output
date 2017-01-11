@@ -81,7 +81,6 @@ void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst
 
 void save(const std::string& filename,
           int report_step,
-          bool first_restart,
           double seconds_elapsed,
           data::Solution cells,
           data::Wells wells,
