@@ -251,6 +251,7 @@ void EclipseIO::Impl::writeINITFile( const data::Solution& simProps, const NNC& 
         ecl_init_file_fwrite_header( fortio.get(),
                                      this->grid.c_ptr(),
                                      NULL,
+                                     units.getEclType(),
                                      this->es.runspec( ).eclPhaseMask( ),
                                      this->es.getSchedule().posixStartTime( ));
 
@@ -460,7 +461,16 @@ EclipseIO::EclipseIO( const EclipseState& es, EclipseGrid grid)
 
 std::pair< data::Solution, data::Wells >
 EclipseIO::load_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) const {
-    return RestartIO::load( es , keys , numcells );
+    const InitConfig& initConfig         = es.getInitConfig();
+    const auto& ioConfig                 = es.getIOConfig();
+    int report_step                      = initConfig.getRestartStep();
+    const std::string& restart_file_root = initConfig.getRestartRootName();
+    bool output                          = false;
+    const std::string filename           = ioConfig.getRestartFileName(restart_file_root,
+                                                                       report_step,
+                                                                       output);
+
+    return RestartIO::load( filename , report_step , es , keys , numcells );
 }
 
 EclipseIO::~EclipseIO() {}

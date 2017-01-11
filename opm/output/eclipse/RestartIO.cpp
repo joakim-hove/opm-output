@@ -36,8 +36,8 @@
 #include <ert/ecl/ecl_init_file.h>
 #include <ert/ecl/ecl_file.h>
 #include <ert/ecl/ecl_grid.h>
+#include <ert/ecl/ecl_util.h>
 #include <ert/ecl/ecl_rft_file.h>
-#include <ert/ecl/ecl_rst_file.h>
 #include <ert/ecl_well/well_const.h>
 #include <ert/ecl/ecl_rsthead.h>
 #include <ert/util/util.h>
@@ -101,8 +101,8 @@ namespace {
 
     inline data::Solution restoreSOLUTION( ecl_file_view_type* file_view,
                                            const std::map<std::string, UnitSystem::measure>& keys,
-                                           int numcells,
-                                           const UnitSystem& units ) {
+                                           const UnitSystem& units,
+                                           int numcells) {
 
         data::Solution sol;
         for (const auto& pair : keys) {
@@ -207,17 +207,8 @@ using rt = data::Rates::opt;
 }
 
 /* should take grid as argument because it may be modified from the simulator */
-std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) {
-
-    const InitConfig& initConfig         = es.getInitConfig();
-    const auto& ioConfig                 = es.getIOConfig();
-    int restart_step                     = initConfig.getRestartStep();
-    const std::string& restart_file_root = initConfig.getRestartRootName();
-    bool output                          = false;
-    const std::string filename           = ioConfig.getRestartFileName(restart_file_root,
-                                                                       restart_step,
-                                                                       output);
-    const bool unified                   = ioConfig.getUNIFIN();
+std::pair< data::Solution, data::Wells > load( const std::string& filename, int report_step, const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) {
+    const bool unified                   = ( ERT::EclFiletype( filename ) == ECL_UNIFIED_RESTART_FILE );
     ERT::ert_unique_ptr< ecl_file_type, ecl_file_close > file(ecl_file_open( filename.c_str(), 0 ));
     ecl_file_view_type * file_view;
 
@@ -225,20 +216,23 @@ std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std
         throw std::runtime_error( "Restart file " + filename + " not found!" );
 
     if( unified ) {
-        file_view = ecl_file_get_restart_view( file.get() , -1 , restart_step , -1 , -1 );
+        file_view = ecl_file_get_restart_view( file.get() , -1 , report_step , -1 , -1 );
         if (!file_view)
             throw std::runtime_error( "Restart file " + filename
                                       + " does not contain data for report step "
-                                      + std::to_string( restart_step ) + "!" );
+                                      + std::to_string( report_step ) + "!" );
     } else
         file_view = ecl_file_get_global_view( file.get() );
 
+    const ecl_kw_type* intehead = ecl_file_view_iget_named_kw( file_view , "INTEHEAD", 0 );
     const ecl_kw_type* opm_xwel = ecl_file_view_iget_named_kw( file_view , "OPM_XWEL", 0 );
     const ecl_kw_type* opm_iwel = ecl_file_view_iget_named_kw( file_view, "OPM_IWEL", 0 );
+
+    UnitSystem units( static_cast<ert_ecl_unit_enum>(ecl_kw_iget_int( intehead , INTEHEAD_UNIT_INDEX )));
     return {
-        restoreSOLUTION( file_view, keys, numcells, es.getUnits() ),
+        restoreSOLUTION( file_view, keys, units , numcells ),
         restore_wells( opm_xwel, opm_iwel,
-                       restart_step,
+                       report_step,
                        es )
     };
 }
@@ -417,23 +411,25 @@ void writeHeader(ecl_rst_file_type * rst_file,
                  time_t posix_time,
                  double sim_days,
                  int ert_phase_mask,
+                 const UnitSystem& units,
                  const Schedule& schedule,
                  const EclipseGrid& grid) {
 
     ecl_rsthead_type rsthead_data = {};
 
-    rsthead_data.sim_time   = posix_time;
-    rsthead_data.nactive    = grid.getNumActive();
-    rsthead_data.nx         = grid.getNX();
-    rsthead_data.ny         = grid.getNY();
-    rsthead_data.nz         = grid.getNZ();
-    rsthead_data.nwells     = schedule.numWells(report_step);
-    rsthead_data.niwelz     = NIWELZ;
-    rsthead_data.nzwelz     = NZWELZ;
-    rsthead_data.niconz     = NICONZ;
-    rsthead_data.ncwmax     = schedule.getMaxNumCompletionsForWells(report_step);
-    rsthead_data.phase_sum  = ert_phase_mask;
-    rsthead_data.sim_days   = sim_days;
+    rsthead_data.sim_time    = posix_time;
+    rsthead_data.nactive     = grid.getNumActive();
+    rsthead_data.nx          = grid.getNX();
+    rsthead_data.ny          = grid.getNY();
+    rsthead_data.nz          = grid.getNZ();
+    rsthead_data.nwells      = schedule.numWells(report_step);
+    rsthead_data.niwelz      = NIWELZ;
+    rsthead_data.nzwelz      = NZWELZ;
+    rsthead_data.niconz      = NICONZ;
+    rsthead_data.ncwmax      = schedule.getMaxNumCompletionsForWells(report_step);
+    rsthead_data.phase_sum   = ert_phase_mask;
+    rsthead_data.sim_days    = sim_days;
+    rsthead_data.unit_system = units.getEclType( );
 
     ecl_util_set_date_values( rsthead_data.sim_time,
                               &rsthead_data.day,
@@ -502,7 +498,7 @@ void save(const std::string& filename,
         rst_file.reset( ecl_rst_file_open_write( filename.c_str() ) );
 
     cells.convertFromSI( units );
-    writeHeader( rst_file.get() , report_step, posix_time , sim_time, ert_phase_mask, schedule , grid );
+    writeHeader( rst_file.get() , report_step, posix_time , sim_time, ert_phase_mask, units, schedule , grid );
     writeWell( rst_file.get() , report_step, es , grid, wells);
     writeSolution( rst_file.get() , cells );
 

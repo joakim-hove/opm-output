@@ -49,19 +49,6 @@ namespace RestartIO {
 
 
 
-
-// Should be private:
-void writeHeader(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file ,
-                 int report_step,
-                 time_t posix_time,
-                 double sim_days,
-                 int ert_phase_mask,
-                 const Schedule& schedule,
-                 const EclipseGrid& grid);
-void writeSolution(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , const data::Solution& solution);
-
-void writeWell(ERT::ert_unique_ptr< ecl_rst_file_type, ecl_rst_file_close >& rst_file , int report_step, const EclipseState& es , const EclipseGrid& grid, const data::Wells& wells);
-
 void save(const std::string& filename,
           int report_step,
           double seconds_elapsed,
@@ -72,7 +59,11 @@ void save(const std::string& filename,
 
 
 
-std::pair< data::Solution, data::Wells > load( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells );
+std::pair< data::Solution, data::Wells > load( const std::string& filename,
+                                               int report_step,
+                                               const EclipseState& es,
+                                               const std::map<std::string, UnitSystem::measure>& keys,
+                                               int numcells );
 
 }
 }
