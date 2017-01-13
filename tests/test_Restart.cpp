@@ -265,26 +265,6 @@ bool operator==( const Well& lhs, const Well& rhs ) {
 
 }
 
-/*
- * forward declarations of internal functions that we want to expose to tests
- * but not to users.
- */
-std::vector< double > serialize_XWEL( const data::Wells& wells,
-                                      int report_step,
-                                      const std::vector< const Well* > sched_wells,
-                                      const Phases&,
-                                      const EclipseGrid& );
-
-std::vector< int > serialize_IWEL( const data::Wells& wells,
-                                   const std::vector< const Well* > sched_wells );
-
-data::Wells restore_wells( const double* xwel_data,
-                           size_t xwel_data_size,
-                           const int* iwel_data,
-                           size_t iwel_data_size,
-                           int restart_step,
-                           const EclipseState& es);
-}
 
 data::Wells mkWells() {
     data::Rates r1, r2, rc1, rc2, rc3;
@@ -384,12 +364,7 @@ first_sim(const EclipseState& es, EclipseIO& eclWriter) {
 }
 
 std::pair< data::Solution, data::Wells > second_sim(const EclipseIO& writer, const std::map<std::string, UnitSystem::measure>& keys) {
-    auto eclipseState = Parser::parseData( input() );
-
-    const auto& grid = eclipseState.getInputGrid();
-    auto num_cells = grid.getNX() * grid.getNY() * grid.getNZ();
-
-    return writer.load_from_restart_file( eclipseState, keys, num_cells );
+    return writer.loadRestart( keys );
 }
 
 
@@ -429,24 +404,4 @@ BOOST_AUTO_TEST_CASE(EclipseReadWriteWellStateData) {
         BOOST_CHECK_THROW( second_sim( eclWriter, extra_keys ) , std::runtime_error );
     }
 }
-
-BOOST_AUTO_TEST_CASE(OPM_XWEL) {
-    auto es = Parser::parseData( input( "XWEL" ) );
-    const auto& grid = es.getInputGrid();
-    const auto& ph = es.runspec().phases();
-    const auto& sched = es.getSchedule( );
-    const auto& sched_wells = sched.getWells( 1 );
-    const auto wells = mkWells();
-
-    /*
-    const auto opm_xwel = RestartIO::serialize_OPM_XWEL( wells, 1, sched_wells, ph, grid );
-    const auto opm_iwel = RestartIO::serialize_OPM_IWEL( wells, sched_wells );
-
-    const auto restored_wells = restore_wells( xwel.data(), xwel.size(),
-    iwel.data(), iwel.size(),
-    1,
-    es );
-
-    BOOST_CHECK_EQUAL( wells, restored_wells );
-    */
 }

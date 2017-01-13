@@ -94,8 +94,11 @@ public:
 
 
     /*
-      Will load solution data and wellstate from the restart file. The
-      map keys should be a map of keyword names and their
+      Will load solution data and wellstate from the restart
+      file. This method will consult the IOConfig object to get
+      filename and report step to restart from.
+
+      The map keys should be a map of keyword names and their
       corresponding dimension object, i.e. to load the state from a
       simple two phase simulation you would pass:
 
@@ -119,7 +122,7 @@ public:
          . The target is unconditionally set to 'RESTART_SOLUTION'
     */
     std::pair< data::Solution, data::Wells >
-    load_from_restart_file( const EclipseState&, const std::map<std::string, UnitSystem::measure>& keys,  int numcells ) const;
+    loadRestart(const std::map<std::string, UnitSystem::measure>& keys) const;
 
 
     EclipseIO( const EclipseIO& ) = delete;

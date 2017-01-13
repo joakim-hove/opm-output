@@ -40,7 +40,6 @@
 #include <opm/parser/eclipse/Utility/Functional.hpp>
 #include <opm/output/eclipse/Summary.hpp>
 #include <opm/output/eclipse/Tables.hpp>
-#include <opm/output/eclipse/RegionCache.hpp>
 #include <opm/output/eclipse/RestartIO.hpp>
 
 #include <cstdlib>
@@ -192,14 +191,12 @@ class EclipseIO::Impl {
         void writeINITFile( const data::Solution& simProps, const NNC& nnc) const;
         void writeEGRIDFile( const NNC& nnc ) const;
 
-        const EclipseState& es;
         EclipseGrid grid;
-        out::RegionCache regionCache;
+        const EclipseState& es;
         std::string outputDir;
         std::string baseName;
         out::Summary summary;
         RFT rft;
-        std::array< int, 3 > cartesianSize;
         bool output_enabled;
 };
 
@@ -207,7 +204,6 @@ EclipseIO::Impl::Impl( const EclipseState& eclipseState,
                            EclipseGrid grid_)
     : es( eclipseState )
     , grid( std::move( grid_ ) )
-    , regionCache( es , grid )
     , outputDir( eclipseState.getIOConfig().getOutputDir() )
     , baseName( uppercase( eclipseState.getIOConfig().getBaseName() ) )
     , summary( eclipseState, eclipseState.getSummaryConfig() , grid )
@@ -431,13 +427,25 @@ void EclipseIO::writeTimeStep(int report_step,
     this->impl->summary.add_timestep( report_step,
                                       secs_elapsed,
                                       this->impl->es,
-                                      this->impl->regionCache,
                                       wells ,
                                       cells_si );
     this->impl->summary.write();
  }
 
 
+std::pair< data::Solution, data::Wells >
+EclipseIO::loadRestart(const std::map<std::string, UnitSystem::measure>& keys) const {
+    const auto& es                       = this->impl->es;
+    const auto& grid                     = this->impl->grid;
+    const InitConfig& initConfig         = es.getInitConfig();
+    const auto& ioConfig                 = es.getIOConfig();
+    const int report_step                = initConfig.getRestartStep();
+    const std::string filename           = ioConfig.getRestartFileName( initConfig.getRestartRootName(),
+                                                                        report_step,
+                                                                        false );
+
+    return RestartIO::load( filename , report_step , keys , es, grid );
+}
 
 EclipseIO::EclipseIO( const EclipseState& es, EclipseGrid grid)
     : impl( new Impl( es, std::move( grid ) ) )
@@ -459,20 +467,10 @@ EclipseIO::EclipseIO( const EclipseState& es, EclipseGrid grid)
     }
 }
 
-std::pair< data::Solution, data::Wells >
-EclipseIO::load_from_restart_file( const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) const {
-    const InitConfig& initConfig         = es.getInitConfig();
-    const auto& ioConfig                 = es.getIOConfig();
-    int report_step                      = initConfig.getRestartStep();
-    const std::string& restart_file_root = initConfig.getRestartRootName();
-    bool output                          = false;
-    const std::string filename           = ioConfig.getRestartFileName(restart_file_root,
-                                                                       report_step,
-                                                                       output);
-
-    return RestartIO::load( filename , report_step , es , keys , numcells );
-}
 
 EclipseIO::~EclipseIO() {}
 
 } // namespace Opm
+
+
+

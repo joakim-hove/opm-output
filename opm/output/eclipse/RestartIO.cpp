@@ -131,10 +131,11 @@ namespace {
 
 
 using rt = data::Rates::opt;
-    data::Wells restore_wells( const ecl_kw_type * opm_xwel,
-                               const ecl_kw_type * opm_iwel,
-                               int restart_step,
-                               const EclipseState& es ) {
+data::Wells restore_wells( const ecl_kw_type * opm_xwel,
+                           const ecl_kw_type * opm_iwel,
+                           const ecl_kw_type * zwel,
+                           int restart_step,
+                           const EclipseState& es ) {
 
     const auto& sched_wells = es.getSchedule().getWells( restart_step );
     const EclipseGrid& grid = es.getInputGrid( );
@@ -207,7 +208,12 @@ using rt = data::Rates::opt;
 }
 
 /* should take grid as argument because it may be modified from the simulator */
-std::pair< data::Solution, data::Wells > load( const std::string& filename, int report_step, const EclipseState& es, const std::map<std::string, UnitSystem::measure>& keys, int numcells ) {
+std::pair< data::Solution, data::Wells > load( const std::string& filename,
+                                               int report_step,
+                                               const std::map<std::string,UnitSystem::measure>& keys,
+                                               const EclipseState& es,
+                                               const EclipseGrid& grid) {
+
     const bool unified                   = ( ERT::EclFiletype( filename ) == ECL_UNIFIED_RESTART_FILE );
     ERT::ert_unique_ptr< ecl_file_type, ecl_file_close > file(ecl_file_open( filename.c_str(), 0 ));
     ecl_file_view_type * file_view;
@@ -224,14 +230,15 @@ std::pair< data::Solution, data::Wells > load( const std::string& filename, int 
     } else
         file_view = ecl_file_get_global_view( file.get() );
 
-    const ecl_kw_type* intehead = ecl_file_view_iget_named_kw( file_view , "INTEHEAD", 0 );
-    const ecl_kw_type* opm_xwel = ecl_file_view_iget_named_kw( file_view , "OPM_XWEL", 0 );
-    const ecl_kw_type* opm_iwel = ecl_file_view_iget_named_kw( file_view, "OPM_IWEL", 0 );
+    const ecl_kw_type * intehead = ecl_file_view_iget_named_kw( file_view , "INTEHEAD", 0 );
+    const ecl_kw_type * opm_xwel = ecl_file_view_iget_named_kw( file_view , "OPM_XWEL", 0 );
+    const ecl_kw_type * opm_iwel = ecl_file_view_iget_named_kw( file_view, "OPM_IWEL", 0 );
+    const ecl_kw_type * zwel     = ecl_file_view_iget_named_kw( file_view , "ZWEL" , 0 );
 
     UnitSystem units( static_cast<ert_ecl_unit_enum>(ecl_kw_iget_int( intehead , INTEHEAD_UNIT_INDEX )));
     return {
-        restoreSOLUTION( file_view, keys, units , numcells ),
-        restore_wells( opm_xwel, opm_iwel,
+        restoreSOLUTION( file_view, keys, units , grid.getNumActive( )),
+        restore_wells( opm_xwel, opm_iwel,zwel,
                        report_step,
                        es )
     };
@@ -315,15 +322,14 @@ std::vector< int > serialize_OPM_IWEL( const data::Wells& wells,
 
     std::vector< int > iwel( sched_wells.size(), 0.0 );
     std::transform( sched_wells.begin(), sched_wells.end(), iwel.begin(), getctrl );
-
     return iwel;
 }
 
 std::vector< double > serialize_OPM_XWEL( const data::Wells& wells,
-                                      int report_step,
-                                      const std::vector< const Well* > sched_wells,
-                                      const Phases& phase_spec,
-                                      const EclipseGrid& grid ) {
+                                          int report_step,
+                                          const std::vector< const Well* > sched_wells,
+                                          const Phases& phase_spec,
+                                          const EclipseGrid& grid ) {
 
     using rt = data::Rates::opt;
 
@@ -403,7 +409,7 @@ std::vector<const char*> serialize_ZWEL( const std::vector<const Well *>& wells)
 
 template< typename T >
 void write_kw(ecl_rst_file_type * rst_file , ERT::EclKW< T >&& kw) {
-   ecl_rst_file_add_kw( rst_file, kw.get() );
+    ecl_rst_file_add_kw( rst_file, kw.get() );
 }
 
 void writeHeader(ecl_rst_file_type * rst_file,

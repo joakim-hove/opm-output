@@ -48,6 +48,27 @@ class Schedule;
 namespace RestartIO {
 
 
+/*
+  The two loose functions RestartIO::save() and RestartIO::load() can
+  be used to save and load reservoir and well state from restart
+  files. Observe that these functions 'just do it', i.e. the checking
+  of which report step to load from, if output is enabled at all and
+  so on is handled by an outer scope.
+
+  If the filename corresponds to unified eclipse restart file,
+  i.e. UNRST the functions will seek correctly to the correct report
+  step, and truncate in the case of save. For any other filename the
+  functions will start reading and writing from file offset zero. If
+  the input filename does not correspond to a unified restart file
+  there is no consistency checking between filename and report step;
+  i.e. these calls:
+
+     load("CASE.X0010" , 99 , ...)
+     save("CASE.X0010" , 99 , ...)
+
+   will read and write to the file "CASE.X0010" - completely ignoring
+   the report step argument '99'.
+*/
 
 void save(const std::string& filename,
           int report_step,
@@ -61,9 +82,9 @@ void save(const std::string& filename,
 
 std::pair< data::Solution, data::Wells > load( const std::string& filename,
                                                int report_step,
-                                               const EclipseState& es,
                                                const std::map<std::string, UnitSystem::measure>& keys,
-                                               int numcells );
+                                               const EclipseState& es,
+                                               const EclipseGrid& grid);
 
 }
 }
