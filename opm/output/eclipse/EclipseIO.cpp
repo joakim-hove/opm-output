@@ -428,7 +428,7 @@ void EclipseIO::writeTimeStep(int report_step,
                                       secs_elapsed,
                                       this->impl->es,
                                       wells ,
-                                      cells_si );
+                                      cells );
     this->impl->summary.write();
  }
 
