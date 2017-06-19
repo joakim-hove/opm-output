@@ -175,6 +175,9 @@ class SummaryComparator {
 
         //! \brief Set whether to throw on errors or not.
         void throwOnErrors(bool dothrow) { throwOnError = dothrow; }
+
+        //! \brief Will check if the two summary cases have identical report times
+        bool checkReportSteps() const;
 };
 
 #endif

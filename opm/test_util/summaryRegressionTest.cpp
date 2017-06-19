@@ -50,9 +50,14 @@ void RegressionTest::getRegressionTest(){
         printKeywords();
     }
 
-
     //Iterates over all keywords from the restricted file, use iterator "ivar". Searches for a  match in the file with more keywords, use the iterator "jvar".
     bool throwAtEnd = false;
+
+    if (!checkReportSteps( )) {
+        HANDLE_ERROR(std::runtime_error, "Report steps are not identical");
+        throwAtEnd = true;
+    }
+
     while(ivar < stringlist_get_size(keysShort)){
         const char* keyword = stringlist_iget(keysShort, ivar);
         std::string keywordString(keyword);

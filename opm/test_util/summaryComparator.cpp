@@ -83,6 +83,26 @@ void SummaryComparator::setTimeVecs(std::vector<double> &timeVec1,
 }
 
 
+bool SummaryComparator::checkReportSteps() const {
+    int first = ecl_sum_get_first_report_step( ecl_sum1 );
+    int last  = ecl_sum_get_last_report_step( ecl_sum1 );
+
+    if (ecl_sum_get_first_report_step(ecl_sum2) != first)
+        return false;
+
+    if (ecl_sum_get_last_report_step(ecl_sum2) != last)
+        return false;
+
+    for (int step=first; step <= last; ++step) {
+        if (ecl_sum_get_report_time( ecl_sum1 , step ) != ecl_sum_get_report_time( ecl_sum2 , step))
+            return false;
+    }
+
+    return true;
+}
+
+
+
 void SummaryComparator::getDataVecs(std::vector<double> &dataVec1,
                                     std::vector<double> &dataVec2,
                                     const char* keyword){
