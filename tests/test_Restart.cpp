@@ -385,8 +385,9 @@ void compare( const RestartValue& fst,
         if (pair.first == "TEMP")
             tol *= 10;
 
-        for( ; first != fst.solution.data( pair.first ).end(); ++first, ++second )
+        for( ; first != fst.solution.data( pair.first ).end(); ++first, ++second ) {
             BOOST_CHECK_CLOSE( *first, *second, tol );
+        }
     }
 
     BOOST_CHECK_EQUAL( fst.wells, snd.wells );
